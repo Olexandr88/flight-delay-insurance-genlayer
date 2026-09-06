@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Flight Delay Insurance — GenLayer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper: #e9eef2;
+  --paper-dark: #dbe4ea;
+  --ink: #142433;
+  --ink-soft: #40566a;
+  --rule: #a9bfcf;
+  --stamp-red: #9b2d20;
+  --stamp-green: #2f6b4f;
+  --stamp-amber: #a8752b;
+  --tag-blue: #1f5f8b;
+  --shadow: rgba(20,36,51,0.18);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:
+    radial-gradient(ellipse at 85% -10%, rgba(255,255,255,0.4), transparent 55%),
+    var(--paper);
+  color:var(--ink);
+  font-family:'Source Serif 4', Georgia, serif;
+  min-height:100vh;
+  padding:32px 16px 80px;
+}
+.sheet{ max-width:880px; margin:0 auto; }
+.ticket-tab{
+  display:inline-block;
+  background:var(--tag-blue);
+  color:#fff;
+  padding:10px 22px 8px;
+  border-radius:6px 6px 0 0;
+  font-family:'Special Elite', monospace;
+  font-size:12px;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  transform:rotate(-0.4deg);
+}
+.folder{
+  background:var(--paper-dark);
+  border:1px solid var(--rule);
+  border-radius:0 10px 10px 10px;
+  box-shadow:0 18px 40px var(--shadow);
+  padding:36px 40px 44px;
+  position:relative;
+}
+header.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  border-bottom:2px solid var(--ink);
+  padding-bottom:14px;
+  margin-bottom:8px;
+}
+h1{
+  font-family:'Special Elite', monospace;
+  font-size:26px;
+  margin:0;
+  line-height:1.15;
+}
+h1 span{display:block; font-size:12px; letter-spacing:0.14em; color:var(--ink-soft); margin-top:6px; text-transform:uppercase;}
+.contract-id{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:12px;
+  text-align:right;
+  color:var(--ink-soft);
+  line-height:1.6;
+}
+.contract-id b{color:var(--ink); font-weight:500;}
+.contract-id a{color:var(--stamp-green); text-decoration:none; border-bottom:1px dotted var(--stamp-green);}
+.lede{
+  font-size:15.5px;
+  line-height:1.6;
+  color:var(--ink-soft);
+  max-width:64ch;
+  margin:18px 0 30px;
+}
+.pool-strip{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:12px;
+  background:rgba(255,255,255,0.5);
+  border:1px solid var(--rule);
+  border-radius:4px;
+  padding:14px 18px;
+  margin-bottom:30px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:12.5px;
+}
+.pool-strip .amt{font-size:18px; color:var(--tag-blue); font-weight:600;}
+.panel{
+  border:1px solid var(--rule);
+  background:rgba(255,255,255,0.4);
+  border-radius:4px;
+  padding:26px 28px 22px;
+  margin-bottom:24px;
+}
+.panel h2{
+  font-family:'Special Elite', monospace;
+  font-size:13px;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  margin:0 0 18px;
+  color:var(--ink-soft);
+}
+.field{margin-bottom:16px;}
+.field label{
+  display:block;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  margin-bottom:6px;
+}
+.field input{
+  width:100%;
+  font-family:'Source Serif 4', Georgia, serif;
+  font-size:15px;
+  color:var(--ink);
+  background:var(--paper);
+  border:1px solid var(--rule);
+  border-radius:3px;
+  padding:10px 12px;
+}
+.field input:focus{ outline:2px solid var(--tag-blue); outline-offset:1px; }
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+.row3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px;}
+@media (max-width:680px){ .row2, .row3{grid-template-columns:1fr;} }
+.btn{
+  font-family:'Special Elite', monospace;
+  font-size:13px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  border:1.5px solid var(--ink);
+  background:transparent;
+  color:var(--ink);
+  padding:10px 20px;
+  border-radius:3px;
+  cursor:pointer;
+  transition:transform 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.btn:hover{background:var(--ink); color:var(--paper);}
+.btn:active{transform:scale(0.97);}
+.btn:disabled{opacity:0.45; cursor:not-allowed;}
+.btn.primary{ border-color:var(--tag-blue); color:var(--tag-blue); }
+.btn.primary:hover{background:var(--tag-blue); color:#fff;}
+.btn-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:6px;}
+.status-line{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:12px;
+  color:var(--ink-soft);
+  min-height:16px;
+}
+.status-line.err{color:var(--stamp-red);}
+.status-line.ok{color:var(--stamp-green);}
+.account-strip{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:10px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11.5px;
+  color:var(--ink-soft);
+  border-top:1px dashed var(--rule);
+  margin-top:16px;
+  padding-top:14px;
+}
+.account-strip a{color:var(--stamp-amber); text-decoration:none; border-bottom:1px dotted var(--stamp-amber);}
+.docket h2{
+  font-family:'Special Elite', monospace;
+  font-size:15px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  margin:0 0 16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+}
+.docket h2 small{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  text-transform:none;
+  color:var(--ink-soft);
+  font-weight:400;
+}
+.policy-card{
+  position:relative;
+  background:rgba(255,255,255,0.4);
+  border:1px solid var(--rule);
+  border-radius:4px;
+  padding:18px 20px 16px;
+  margin-bottom:16px;
+  overflow:hidden;
+}
+.policy-card .num{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  color:var(--ink-soft);
+  margin-bottom:6px;
+}
+.policy-card .flight{
+  font-size:17px;
+  font-weight:600;
+  margin:0 0 10px;
+}
+.policy-card .meta{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  color:var(--ink-soft);
+  display:flex;
+  align-items:center;
+  gap:14px;
+  flex-wrap:wrap;
+  margin-bottom:8px;
+}
+.policy-card .meta a{color:var(--ink-soft);}
+.status-badge{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:10.5px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  padding:2px 9px;
+  border-radius:10px;
+  border:1px solid currentColor;
+}
+.status-badge.pending{color:var(--ink-soft); border-style:dashed;}
+.status-badge.checked{color:var(--stamp-amber);}
+.status-badge.settled{color:var(--stamp-green);}
+.status-badge.disputed{color:var(--stamp-red);}
+.verdict-stamp{
+  position:absolute;
+  top:12px;
+  right:18px;
+  font-family:'Special Elite', monospace;
+  font-size:16px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  padding:5px 12px;
+  border:3px solid currentColor;
+  border-radius:6px;
+  transform:rotate(-6deg);
+  opacity:0.88;
+  mix-blend-mode:multiply;
+}
+.verdict-stamp.delayed{color:var(--stamp-red);}
+.verdict-stamp.on_time{color:var(--stamp-green);}
+.verdict-stamp.undetermined{color:var(--stamp-amber); font-size:13px;}
+.policy-card .actions{margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;}
+.empty{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:12.5px;
+  color:var(--ink-soft);
+  padding:20px 0;
+  text-align:center;
+  border:1px dashed var(--rule);
+  border-radius:4px;
+}
+footer.foot{
+  max-width:880px;
+  margin:22px auto 0;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  color:var(--ink-soft);
+  text-align:center;
+}
+footer.foot a{color:var(--tag-blue); text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="ticket-tab">Policy Desk · Live</div>
+  <div class="folder">
+    <header class="top">
+      <h1>Flight Delay Insurance<span>Parametric coverage, adjudicated by GenLayer</span></h1>
+      <div class="contract-id">
+        Contract<br>
+        <b id="contractShort">…</b><br>
+        <a id="explorerLink" href="#" target="_blank" rel="noopener">view on explorer →</a>
+      </div>
+    </header>
+
+    <p class="lede">Buy coverage for a specific flight. If it lands 2+ hours late, GenLayer validators confirm it by reading a live flight-status page and you get paid automatically — no claims adjuster, no paperwork.</p>
+
+    <div class="pool-strip">
+      <span>Shared payout pool: <span class="amt" id="poolAmount">…</span> GEN</span>
+      <span id="fundLine">
+        <input id="fundAmount" type="text" placeholder="GEN amount" style="width:110px; font-family:'IBM Plex Mono',monospace; font-size:12px; padding:5px 8px; border:1px solid var(--rule); border-radius:3px; background:var(--paper);" />
+        <button class="btn" id="fundBtn" style="font-size:11px; padding:6px 12px;">Back the pool</button>
+      </span>
+    </div>
+
+    <section class="panel">
+      <h2>Buy a Policy</h2>
+      <div class="row2">
+        <div class="field">
+          <label for="flightNumber">Flight number</label>
+          <input id="flightNumber" type="text" placeholder="e.g. UA245" />
+        </div>
+        <div class="field">
+          <label for="flightDate">Flight date</label>
+          <input id="flightDate" type="text" placeholder="e.g. 2026-09-20" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="statusUrl">Flight-status URL (source checked at settlement)</label>
+        <input id="statusUrl" type="text" placeholder="https://…" />
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label for="payoutAmount">Payout if delayed (GEN)</label>
+          <input id="payoutAmount" type="text" placeholder="e.g. 30" />
+        </div>
+        <div class="field">
+          <label for="premiumAmount">Premium to pay now (GEN)</label>
+          <input id="premiumAmount" type="text" placeholder="e.g. 5" />
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="buyBtn">Buy Policy</button>
+        <span class="status-line" id="buyStatus"></span>
+      </div>
+      <div class="account-strip">
+        <span id="acctLine">No account loaded.</span>
+        <span>
+          <button class="btn" id="genAcctBtn" style="font-size:11px; padding:6px 12px;">Generate test account</button>
+          <a id="faucetLink" href="https://studio.genlayer.com/contracts" target="_blank" rel="noopener">fund via Studio faucet →</a>
+        </span>
+      </div>
+    </section>
+
+    <section class="docket">
+      <h2>Policies <small id="policyCount">loading…</small></h2>
+      <div id="policyList">
+        <div class="empty">Reading the policy book…</div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="refreshBtn">Refresh</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<footer class="foot">
+  Testnet demo. Policies and payouts run on GenLayer Studionet, not a real insurer. · <a href="https://docs.genlayer.com" target="_blank" rel="noopener">docs.genlayer.com</a>
+</footer>
+
+<script type="module">
+import { createClient, createAccount } from "https://esm.sh/genlayer-js@latest?bundle";
+
+const CONTRACT = "0x4332e6ab7210Cc92167c6ab14e391d9C5ACe1D34";
+const STUDIO_CHAIN = {
+  id: 61999,
+  name: "studionet",
+  rpcUrls: { default: { http: ["https://studio.genlayer.com/api"] } },
+};
+
+document.getElementById("contractShort").textContent =
+  CONTRACT.slice(0, 6) + "…" + CONTRACT.slice(-4);
+document.getElementById("explorerLink").href =
+  "https://explorer-studio.genlayer.com/address/" + CONTRACT;
+
+let readClient;
+let account = null;
+let writeClient = null;
+
+function setStatus(el, msg, kind) {
+  el.textContent = msg || "";
+  el.className = "status-line" + (kind ? " " + kind : "");
+}
+
+function genToWei(amountGen) {
+  // GEN uses 18 decimals, like ETH/wei. Multiply in two steps to dodge
+  // JS float precision loss beyond 1e6 GEN, which is far more than any
+  // demo amount needs.
+  return BigInt(Math.round(amountGen * 1e6)) * 1000000000000n;
+}
+function genFmt(weiValue) {
+  try {
+    const wei = BigInt(weiValue ?? 0);
+    const whole = wei / 1000000000000000000n;
+    const frac = wei % 1000000000000000000n;
+    if (frac === 0n) return whole.toString();
+    const fracStr = frac.toString().padStart(18, "0").slice(0, 4).replace(/0+$/, "");
+    return fracStr ? `${whole}.${fracStr}` : whole.toString();
+  } catch {
+    return "0";
+  }
+}
+
+function statusBadgeClass(status) {
+  if (status === "settled") return "status-badge settled";
+  if (status === "disputed") return "status-badge disputed";
+  if (status === "checked") return "status-badge checked";
+  return "status-badge pending";
+}
+function statusLabel(status) {
+  if (status === "settled") return "SETTLED";
+  if (status === "disputed") return "DISPUTED";
+  if (status === "checked") return "CHECKED";
+  return "PENDING";
+}
+function verdictStampClass(verdict) {
+  if (verdict === "delayed") return "verdict-stamp delayed";
+  if (verdict === "on_time") return "verdict-stamp on_time";
+  if (verdict === "undetermined") return "verdict-stamp undetermined";
+  return "";
+}
+function verdictLabel(verdict) {
+  if (verdict === "delayed") return "DELAYED";
+  if (verdict === "on_time") return "ON TIME";
+  if (verdict === "undetermined") return "UNDET.";
+  return "";
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[m]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+function shorten(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+async function initReadClient() {
+  readClient = createClient({ chain: STUDIO_CHAIN });
+}
+
+async function loadPool() {
+  try {
+    const bal = await readClient.readContract({
+      address: CONTRACT,
+      functionName: "get_pool_balance",
+      args: [],
+    });
+    document.getElementById("poolAmount").textContent = genFmt(bal);
+  } catch (e) {
+    console.error(e);
+    document.getElementById("poolAmount").textContent = "—";
+  }
+}
+
+async function loadPolicies() {
+  const list = document.getElementById("policyList");
+  const count = document.getElementById("policyCount");
+  list.innerHTML = '<div class="empty">Reading the policy book…</div>';
+  try {
+    const total = await readClient.readContract({
+      address: CONTRACT,
+      functionName: "total_policies",
+      args: [],
+    });
+    const n = Number(total);
+    count.textContent = n + (n === 1 ? " policy" : " policies");
+
+    if (n === 0) {
+      list.innerHTML = '<div class="empty">No policies yet. Be the first to buy coverage.</div>';
+      return;
+    }
+
+    const cards = [];
+    for (let i = n - 1; i >= 0; i--) {
+      try {
+        const p = await readClient.readContract({
+          address: CONTRACT,
+          functionName: "get_policy",
+          args: [i],
+        });
+        cards.push(renderPolicy(i, p));
+      } catch (e) {
+        console.warn("could not read policy", i, e);
+      }
+    }
+    list.innerHTML = cards.join("") || '<div class="empty">Policy book is empty.</div>';
+    attachHandlers();
+  } catch (e) {
+    console.error(e);
+    list.innerHTML =
+      '<div class="empty">Could not reach the contract right now. Contract: ' + CONTRACT + '</div>';
+    count.textContent = "";
+  }
+}
+
+function renderPolicy(id, p) {
+  const status = p.status || "pending";
+  const verdict = p.verdict || "";
+  const showStamp = verdict !== "";
+  const canEvaluate = status === "pending" || status === "checked";
+  const canClaim = status === "settled" || status === "disputed";
+
+  return `
+    <div class="policy-card">
+      ${showStamp ? `<div class="${verdictStampClass(verdict)}">${verdictLabel(verdict)}</div>` : ""}
+      <div class="num">Policy #${String(id).padStart(3, "0")}</div>
+      <p class="flight">${escapeHtml(p.flight_number || "")} — ${escapeHtml(p.flight_date || "")}</p>
+      <div class="meta">
+        <span class="${statusBadgeClass(status)}">${statusLabel(status)}</span>
+        <span>Source: <a href="${escapeAttr(p.status_url || "")}" target="_blank" rel="noopener">${escapeHtml(shorten(p.status_url || "", 36))}</a></span>
+        <span>Premium: ${genFmt(p.premium)} GEN · Payout: ${genFmt(p.payout_amount)} GEN</span>
+        ${p.delay_minutes ? `<span>Delay: ${p.delay_minutes} min</span>` : ""}
+      </div>
+      <div class="actions">
+        ${canEvaluate ? `<button class="btn evaluate-btn" data-id="${id}" style="font-size:11px; padding:6px 12px;">Evaluate flight</button>` : ""}
+        ${canClaim && !p.claimed ? `<button class="btn primary claim-btn" data-id="${id}" style="font-size:11px; padding:6px 12px;">Claim payout</button>` : ""}
+        ${p.claimed ? `<span class="status-line ok">Claimed</span>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function attachHandlers() {
+  document.querySelectorAll(".evaluate-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(btn.dataset.id);
+      if (!writeClient) { alert("Generate a test account first."); return; }
+      btn.disabled = true;
+      btn.textContent = "Evaluating…";
+      try {
+        const hash = await writeClient.writeContract({
+          account, address: CONTRACT, functionName: "evaluate_flight", args: [id], value: 0,
+        });
+        await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+        await loadPolicies();
+      } catch (e) {
+        console.error(e);
+        alert("Evaluate failed: " + (e?.message || e));
+        btn.disabled = false;
+        btn.textContent = "Evaluate flight";
+      }
+    });
+  });
+
+  document.querySelectorAll(".claim-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = Number(btn.dataset.id);
+      if (!writeClient) { alert("Generate a test account first."); return; }
+      btn.disabled = true;
+      btn.textContent = "Claiming…";
+      try {
+        const hash = await writeClient.writeContract({
+          account, address: CONTRACT, functionName: "claim_payout", args: [id], value: 0,
+        });
+        await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+        await loadPolicies();
+        await loadPool();
+      } catch (e) {
+        console.error(e);
+        alert("Claim failed: " + (e?.message || e));
+        btn.disabled = false;
+        btn.textContent = "Claim payout";
+      }
+    });
+  });
+}
+
+document.getElementById("genAcctBtn").addEventListener("click", () => {
+  account = createAccount();
+  writeClient = createClient({ chain: STUDIO_CHAIN, account });
+  document.getElementById("acctLine").innerHTML =
+    "Signing as <b>" + account.address.slice(0, 8) + "…" + account.address.slice(-4) + "</b>";
+});
+
+document.getElementById("fundBtn").addEventListener("click", async () => {
+  const amountGen = parseFloat(document.getElementById("fundAmount").value || "0");
+  if (!writeClient) { alert("Generate a test account first."); return; }
+  if (!amountGen || amountGen <= 0) { alert("Enter a GEN amount."); return; }
+  try {
+    const hash = await writeClient.writeContract({
+      account, address: CONTRACT, functionName: "fund_pool", args: [], value: genToWei(amountGen),
+    });
+    await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+    document.getElementById("fundAmount").value = "";
+    await loadPool();
+  } catch (e) {
+    console.error(e);
+    alert("Funding failed: " + (e?.message || e));
+  }
+});
+
+document.getElementById("buyBtn").addEventListener("click", async () => {
+  const statusEl = document.getElementById("buyStatus");
+  const flight_number = document.getElementById("flightNumber").value.trim();
+  const flight_date = document.getElementById("flightDate").value.trim();
+  const status_url = document.getElementById("statusUrl").value.trim();
+  const payoutGen = parseFloat(document.getElementById("payoutAmount").value || "0");
+  const premiumGen = parseFloat(document.getElementById("premiumAmount").value || "0");
+
+  if (!flight_number || !flight_date || !status_url) {
+    setStatus(statusEl, "Fill in the flight number, date, and status URL.", "err");
+    return;
+  }
+  if (!payoutGen || payoutGen <= 0 || !premiumGen || premiumGen <= 0) {
+    setStatus(statusEl, "Enter a payout amount and a premium, both greater than zero.", "err");
+    return;
+  }
+  if (!writeClient) {
+    setStatus(statusEl, "Generate a test account first.", "err");
+    return;
+  }
+  const btn = document.getElementById("buyBtn");
+  btn.disabled = true;
+  setStatus(statusEl, "Buying policy…", "");
+  try {
+    const hash = await writeClient.writeContract({
+      account,
+      address: CONTRACT,
+      functionName: "buy_policy",
+      args: [flight_number, flight_date, status_url, genToWei(payoutGen)],
+      value: genToWei(premiumGen),
+    });
+    await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+    setStatus(statusEl, "Policy purchased.", "ok");
+    document.getElementById("flightNumber").value = "";
+    document.getElementById("flightDate").value = "";
+    document.getElementById("statusUrl").value = "";
+    document.getElementById("payoutAmount").value = "";
+    document.getElementById("premiumAmount").value = "";
+    await loadPolicies();
+    await loadPool();
+  } catch (e) {
+    console.error(e);
+    setStatus(statusEl, "Purchase failed: " + (e?.message || e), "err");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById("refreshBtn").addEventListener("click", () => {
+  loadPolicies();
+  loadPool();
+});
+
+initReadClient().then(() => {
+  loadPool();
+  loadPolicies();
+});
+</script>
+</body>
+</html>
