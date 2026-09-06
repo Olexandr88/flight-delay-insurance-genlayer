@@ -12,7 +12,7 @@ flight-status page.
 
 ## Live demo
 
-_add your Netlify URL here after deploying_
+https://moonlit-stardust-16a3b2.netlify.app
 
 ## What it does
 
