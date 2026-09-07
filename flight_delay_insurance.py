@@ -2,6 +2,7 @@
 
 from genlayer import *
 from dataclasses import dataclass
+import datetime
 import typing
 
 DELAY_THRESHOLD_MINUTES = 120
@@ -42,24 +43,31 @@ class FlightDelayInsurance(gl.Contract):
     A standalone Intelligent Contract: parametric flight-delay insurance.
 
     Anyone can back the shared payout pool. Anyone can buy a policy for a
-    specific flight by paying a premium and naming the payout they want if
-    the flight is significantly delayed. After the scheduled date, anyone
-    can trigger evaluate_flight(): GenLayer validators independently read
-    a live flight-status page and reach consensus on whether the flight
-    was delayed, on time, or undetermined. A policy only settles after two
-    consecutive matching evaluations. Once settled, the policyholder calls
-    claim_payout() to receive their payout (if delayed), a full premium
-    refund (if undetermined or disputed), or nothing (if on time — the
-    premium stays in the pool, same as any real insurance premium).
+    specific flight, before it departs, by paying a premium and naming the
+    payout they want if the flight is significantly delayed. After the
+    flight's scheduled date, anyone can trigger evaluate_flight():
+    GenLayer validators independently read a live flight-status page and
+    reach consensus on whether the flight was delayed, on time, or
+    undetermined. A policy only settles after two consecutive matching
+    evaluations. Once settled, the policyholder calls claim_payout() to
+    receive their payout (if delayed), a full premium refund (if
+    undetermined or disputed), or nothing (if on time — the premium stays
+    in the pool, same as any real insurance premium).
+
+    Every payout is reserved out of the pool at purchase time, so a
+    policy's promised payout can never be double-committed against
+    liquidity another policy is also counting on.
     """
 
     policies: TreeMap[u32, Policy]
     next_id: u32
     pool_balance: u256
+    reserved_total: u256  # sum of payout_amount for every unsettled policy
 
     def __init__(self):
         self.next_id = u32(0)
         self.pool_balance = u256(0)
+        self.reserved_total = u256(0)
 
     # ------------------------------------------------------------------
     # Funding the shared payout pool
@@ -70,6 +78,13 @@ class FlightDelayInsurance(gl.Contract):
         """Anyone can back the pool that policy payouts are drawn from."""
         self.pool_balance = u256(self.pool_balance + gl.message.value)
 
+    @gl.public.view
+    def available_liquidity(self) -> u256:
+        """Pool balance minus everything already promised to open policies."""
+        if self.reserved_total >= self.pool_balance:
+            return u256(0)
+        return u256(self.pool_balance - self.reserved_total)
+
     # ------------------------------------------------------------------
     # Buying a policy
     # ------------------------------------------------------------------
@@ -79,19 +94,55 @@ class FlightDelayInsurance(gl.Contract):
         self,
         flight_number: str,
         flight_date: str,
-        status_url: str,
         payout_amount: u256,
     ) -> u32:
         """
         Pays the attached GEN as the premium for a new policy on the given
         flight. payout_amount is what the policyholder will receive if the
         flight turns out to be significantly delayed.
+
+        flight_date must be a future date ("YYYY-MM-DD") — coverage can
+        only be bought before departure, never after the outcome is
+        already known.
+
+        The evidence source is derived from flight_number, not supplied by
+        the buyer: this is a public, well-known flight-tracking URL
+        pattern, not a page the policyholder could control or fake.
         """
         premium = gl.message.value
         if premium == u256(0):
             raise gl.vm.UserError("Send some GEN as the premium")
         if payout_amount == u256(0):
             raise gl.vm.UserError("payout_amount must be greater than zero")
+
+        try:
+            parsed_date = datetime.date.fromisoformat(flight_date)
+        except ValueError:
+            raise gl.vm.UserError("flight_date must be in YYYY-MM-DD format")
+
+        if parsed_date <= datetime.datetime.now().date():
+            raise gl.vm.UserError(
+                "Coverage can only be purchased for a flight that hasn't "
+                "departed yet — flight_date must be a future date"
+            )
+
+        # Reserve this payout against the pool's *available* liquidity —
+        # i.e. what's left after every other open policy's own promised
+        # payout has already been set aside. A policy is never allowed to
+        # exist unless the pool can actually cover it.
+        self.pool_balance = u256(self.pool_balance + premium)
+        available = u256(0)
+        if self.pool_balance > self.reserved_total:
+            available = u256(self.pool_balance - self.reserved_total)
+        if available < payout_amount:
+            raise gl.vm.UserError(
+                "Insufficient pool liquidity to cover this payout — "
+                "unfunded coverage is rejected. Ask someone to fund_pool() "
+                "first, or request a smaller payout_amount."
+            )
+        self.reserved_total = u256(self.reserved_total + payout_amount)
+
+        status_url = f"https://www.flightaware.com/live/flight/{flight_number}"
 
         policy_id = self.next_id
         self.policies[policy_id] = Policy(
@@ -109,7 +160,6 @@ class FlightDelayInsurance(gl.Contract):
             claimed=False,
         )
         self.next_id = u32(self.next_id + 1)
-        self.pool_balance = u256(self.pool_balance + premium)
         return policy_id
 
     # ------------------------------------------------------------------
@@ -122,11 +172,22 @@ class FlightDelayInsurance(gl.Contract):
             raise gl.vm.UserError("Unknown policy id")
         policy = self.policies[policy_id]
 
-        # Once settled, a policy's payout is fixed. It must never be
-        # re-evaluated — otherwise a verdict could flip after a claim has
-        # already been paid out.
-        if policy.status == "settled":
-            raise gl.vm.UserError("Policy already settled")
+        # A settled or disputed policy is terminal: its payout has either
+        # already been claimed or is permanently a full refund. It must
+        # never be re-evaluated — otherwise a verdict could flip after
+        # money has already moved.
+        if policy.status in ("settled", "disputed"):
+            raise gl.vm.UserError(
+                "Policy already settled — settled and disputed policies "
+                "are both terminal and can never be re-evaluated"
+            )
+
+        scheduled = datetime.date.fromisoformat(policy.flight_date)
+        if scheduled >= datetime.datetime.now().date():
+            raise gl.vm.UserError(
+                "This flight hasn't departed yet — evaluation is only "
+                "possible after the scheduled flight date has passed"
+            )
 
         status_url = policy.status_url
         flight_number = policy.flight_number
@@ -209,15 +270,18 @@ This result must be perfectly parsable by a JSON parser without errors.
     @gl.public.write
     def claim_payout(self, policy_id: u32) -> u256:
         """
-        - status == "settled" and verdict == "delayed": pays out
-          min(payout_amount, pool_balance) — the pool never pays out more
-          than it holds.
+        - status == "settled" and verdict == "delayed": pays out the full
+          payout_amount — this is guaranteed available, since it was
+          reserved out of the pool back when the policy was purchased.
         - status == "settled" and verdict == "on_time": nothing to claim;
           the premium stays in the pool, same as a real insurance premium.
         - status == "settled" and verdict == "undetermined", or
           status == "disputed": the flight's status could not be reliably
           determined, so the premium is refunded in full.
-        - Otherwise (still pending/checked): reverts.
+
+        In every case, this policy's reservation is released back to the
+        pool's available liquidity — a settled policy never keeps holding
+        capacity hostage from other policies.
         """
         if policy_id not in self.policies:
             raise gl.vm.UserError("Unknown policy id")
@@ -227,29 +291,29 @@ This result must be perfectly parsable by a JSON parser without errors.
             raise gl.vm.UserError("Only the policyholder can claim this policy")
         if policy.claimed:
             raise gl.vm.UserError("Already claimed")
-
-        if policy.status == "settled":
-            if policy.verdict == "delayed":
-                payout = policy.payout_amount
-                if payout > self.pool_balance:
-                    payout = self.pool_balance
-            elif policy.verdict == "on_time":
-                payout = u256(0)
-            else:  # "undetermined"
-                payout = policy.premium
-                if payout > self.pool_balance:
-                    payout = self.pool_balance
-        elif policy.status == "disputed":
-            payout = policy.premium
-            if payout > self.pool_balance:
-                payout = self.pool_balance
-        else:
+        if policy.status not in ("settled", "disputed"):
             raise gl.vm.UserError("Policy is not settled or disputed yet")
+
+        if policy.status == "settled" and policy.verdict == "delayed":
+            payout = policy.payout_amount
+        elif policy.status == "settled" and policy.verdict == "on_time":
+            payout = u256(0)
+        else:  # "undetermined" (settled) or "disputed"
+            payout = policy.premium
 
         policy.claimed = True
         self.policies[policy_id] = policy
 
+        # Release this policy's reservation now that it's settled, whether
+        # or not the full reserved amount was actually paid out.
+        if self.reserved_total >= policy.payout_amount:
+            self.reserved_total = u256(self.reserved_total - policy.payout_amount)
+        else:
+            self.reserved_total = u256(0)
+
         if payout > u256(0):
+            if payout > self.pool_balance:
+                payout = self.pool_balance
             self.pool_balance = u256(self.pool_balance - payout)
             _EOA(policy.policyholder).emit_transfer(value=payout)
 
@@ -282,6 +346,10 @@ This result must be perfectly parsable by a JSON parser without errors.
     @gl.public.view
     def get_pool_balance(self) -> u256:
         return self.pool_balance
+
+    @gl.public.view
+    def get_reserved_total(self) -> u256:
+        return self.reserved_total
 
     @gl.public.view
     def total_policies(self) -> u32:
