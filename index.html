@@ -293,7 +293,7 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
     <p class="lede">Buy coverage for a specific flight. If it lands 2+ hours late, GenLayer validators confirm it by reading a live flight-status page and you get paid automatically — no claims adjuster, no paperwork.</p>
 
     <div class="pool-strip">
-      <span>Shared payout pool: <span class="amt" id="poolAmount">…</span> GEN</span>
+      <span>Shared payout pool: <span class="amt" id="poolAmount">…</span> GEN <span style="font-size:11px; color:var(--ink-soft);">(<span id="availableAmount">…</span> GEN available, unreserved)</span></span>
       <span id="fundLine">
         <input id="fundAmount" type="text" placeholder="GEN amount" style="width:110px; font-family:'IBM Plex Mono',monospace; font-size:12px; padding:5px 8px; border:1px solid var(--rule); border-radius:3px; background:var(--paper);" />
         <button class="btn" id="fundBtn" style="font-size:11px; padding:6px 12px;">Back the pool</button>
@@ -308,14 +308,13 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
           <input id="flightNumber" type="text" placeholder="e.g. UA245" />
         </div>
         <div class="field">
-          <label for="flightDate">Flight date</label>
+          <label for="flightDate">Flight date (must be in the future)</label>
           <input id="flightDate" type="text" placeholder="e.g. 2026-09-20" />
         </div>
       </div>
-      <div class="field">
-        <label for="statusUrl">Flight-status URL (source checked at settlement)</label>
-        <input id="statusUrl" type="text" placeholder="https://…" />
-      </div>
+      <p style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); margin:-4px 0 16px;">
+        The evidence source is derived automatically from the flight number (a public FlightAware page) — not something you choose, so it can't be pointed at a page you control.
+      </p>
       <div class="row2">
         <div class="field">
           <label for="payoutAmount">Payout if delayed (GEN)</label>
@@ -358,7 +357,7 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
 <script type="module">
 import { createClient, createAccount } from "https://esm.sh/genlayer-js@latest?bundle";
 
-const CONTRACT = "0x4332e6ab7210Cc92167c6ab14e391d9C5ACe1D34";
+const CONTRACT = "0x5b3433B857619C2e126CA95c0cD28dC63E59Ac87";
 const STUDIO_CHAIN = {
   id: 61999,
   name: "studionet",
@@ -442,9 +441,16 @@ async function loadPool() {
       args: [],
     });
     document.getElementById("poolAmount").textContent = genFmt(bal);
+    const available = await readClient.readContract({
+      address: CONTRACT,
+      functionName: "available_liquidity",
+      args: [],
+    });
+    document.getElementById("availableAmount").textContent = genFmt(available);
   } catch (e) {
     console.error(e);
     document.getElementById("poolAmount").textContent = "—";
+    document.getElementById("availableAmount").textContent = "—";
   }
 }
 
@@ -589,11 +595,10 @@ document.getElementById("buyBtn").addEventListener("click", async () => {
   const statusEl = document.getElementById("buyStatus");
   const flight_number = document.getElementById("flightNumber").value.trim();
   const flight_date = document.getElementById("flightDate").value.trim();
-  const status_url = document.getElementById("statusUrl").value.trim();
   const payoutGen = parseFloat(document.getElementById("payoutAmount").value || "0");
   const premiumGen = parseFloat(document.getElementById("premiumAmount").value || "0");
 
-  if (!flight_number || !flight_date || !status_url) {
+  if (!flight_number || !flight_date) {
     setStatus(statusEl, "Fill in the flight number, date, and status URL.", "err");
     return;
   }
@@ -613,14 +618,13 @@ document.getElementById("buyBtn").addEventListener("click", async () => {
       account,
       address: CONTRACT,
       functionName: "buy_policy",
-      args: [flight_number, flight_date, status_url, genToWei(payoutGen)],
+      args: [flight_number, flight_date, genToWei(payoutGen)],
       value: genToWei(premiumGen),
     });
     await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
     setStatus(statusEl, "Policy purchased.", "ok");
     document.getElementById("flightNumber").value = "";
     document.getElementById("flightDate").value = "";
-    document.getElementById("statusUrl").value = "";
     document.getElementById("payoutAmount").value = "";
     document.getElementById("premiumAmount").value = "";
     await loadPolicies();
