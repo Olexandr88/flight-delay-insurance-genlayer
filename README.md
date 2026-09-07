@@ -8,36 +8,47 @@ flight-status page.
 
 ## Deployed contract
 
-`0x4332e6ab7210Cc92167c6ab14e391d9C5ACe1D34` (GenLayer Studionet)
+`0x5b3433B857619C2e126CA95c0cD28dC63E59Ac87` (GenLayer Studionet)
 
 ## Live demo
 
-https://moonlit-stardust-16a3b2.netlify.app
+https://courageous-otter-9bfc0e.netlify.app
 
 ## What it does
 
 - **`fund_pool()`** — payable. Anyone can back the shared pool that
   payouts are drawn from, like an underwriter.
-- **`buy_policy(flight_number, flight_date, status_url, payout_amount)`**
-  — payable. The attached GEN is the premium. `payout_amount` is what the
+- **`buy_policy(flight_number, flight_date, payout_amount)`** — payable.
+  The attached GEN is the premium. `payout_amount` is what the
   policyholder receives if the flight turns out to be significantly
-  delayed. `status_url` is the live page validators will check at
-  settlement (e.g. a flight tracker page for that flight).
-- **`evaluate_flight(policy_id)`** — after the flight's scheduled date,
-  anyone can trigger this. Each validator independently fetches
-  `status_url` and asks an LLM to classify the flight as `delayed`
-  (2+ hours late), `on_time`, or `undetermined`, using a custom
-  Equivalence Principle check that only requires validators to agree on
-  the classification — not on the exact minute estimate or reasoning
-  text, since those legitimately vary between independent reads of a live
-  page and LLM runs.
-- **`claim_payout(policy_id)`** — once a policy is `settled`:
-  - `delayed` → pays out `min(payout_amount, pool_balance)`.
-  - `on_time` → nothing to claim; the premium stays in the pool, same as
-    a real insurance premium.
-  - `undetermined`, or a policy that ended up `disputed` instead of
-    settled → the premium is refunded in full, since the flight's status
-    couldn't be reliably determined.
+  delayed. `flight_date` must be a future date (`YYYY-MM-DD`) — coverage
+  can only be bought before departure, never after the outcome is
+  already known. The evidence source is **derived automatically** from
+  `flight_number` (`https://www.flightaware.com/live/flight/{flight_number}`)
+  rather than supplied by the buyer, so a policyholder can never point
+  validators at a page they control. The payout is also **reserved**
+  out of the pool's available liquidity at purchase time — if the pool
+  can't currently cover it, the purchase reverts rather than create
+  unfunded coverage.
+- **`evaluate_flight(policy_id)`** — only callable after the flight's
+  scheduled date has passed. Each validator independently fetches the
+  derived `status_url` and asks an LLM to classify the flight as
+  `delayed` (2+ hours late), `on_time`, or `undetermined`, using a
+  custom Equivalence Principle check that only requires validators to
+  agree on the classification — not on the exact minute estimate or
+  reasoning text, since those legitimately vary between independent
+  reads of a live page and LLM runs.
+- **`claim_payout(policy_id)`** — once a policy is `settled` or
+  `disputed`:
+  - `settled` + `delayed` → pays out the full `payout_amount`
+    (guaranteed available, since it was reserved at purchase).
+  - `settled` + `on_time` → nothing to claim; the premium stays in the
+    pool, same as a real insurance premium.
+  - `settled` + `undetermined`, or `disputed` → the premium is refunded
+    in full, since the flight's status couldn't be reliably determined.
+
+  Every claim releases that policy's reservation back to the pool's
+  available liquidity, regardless of which branch paid out.
 
 ### Lifecycle vs. verdict
 
@@ -50,9 +61,12 @@ GenLayer oracle that needs to be trusted with money:
 A single evaluation only ever produces a provisional `checked` policy. It
 takes **two consecutive evaluations agreeing on the same verdict** for a
 policy to `settle`. If a later evaluation disagrees instead, the policy
-moves to `disputed` (premium refunded). Once `settled`, a policy is
-frozen — `evaluate_flight()` reverts rather than let a paid-out verdict
-move again.
+moves to `disputed`. **Both `settled` and `disputed` are terminal** —
+`evaluate_flight()` reverts for a policy in either state, so a verdict
+people have already been paid out (or refunded) against can never move
+again, even after that refund has already gone out. See
+[TESTS.md](./TESTS.md) for the exact call sequences that verify this,
+along with the timing, evidence, and solvency guarantees above.
 
 ## Why this matters
 
