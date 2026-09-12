@@ -24,7 +24,15 @@ https://courageous-otter-9bfc0e.netlify.app
   delayed. `flight_date` must be a future date (`YYYY-MM-DD`) — coverage
   can only be bought before departure, never after the outcome is
   already known. The evidence source is **derived automatically** from
-  `flight_number` (`https://www.flightaware.com/live/flight/{flight_number}`)
+  `flight_number` **and** `flight_date` together
+  (`https://www.flightaware.com/live/flight/{flight_number}/history/{flight_date}`),
+  not just the flight number alone — so the same URL can never be reused
+  across different dates for the same flight. Before any LLM judgment
+  even runs, a deterministic check (identical for every validator)
+  verifies the fetched page actually contains both the flight number and
+  the date; if it doesn't, the result is `undetermined` without ever
+  reaching the LLM. Only evidence that passes this check is handed to the
+  LLM for delay adjudication.
   rather than supplied by the buyer, so a policyholder can never point
   validators at a page they control. The payout is also **reserved**
   out of the pool's available liquidity at purchase time — if the pool
@@ -79,7 +87,18 @@ and trustlessly the moment they agree.
 
 ## Files
 
-- `flight_delay_insurance.py` — the contract (Python, GenLayer SDK).
+- `contracts/flight_delay_insurance.py` — the contract (Python, GenLayer SDK).
+- `tests/test_lifecycle.py` — executable pytest tests (GenLayer's official
+  `genlayer-test` / `gltest` Direct Mode) that actually run against the
+  contract: timing guards (purchase-before-departure, evaluate-after-departure),
+  evidence-URL derivation bound to both flight number and date, and
+  pool-solvency/reservation checks. Run with
+  `pip install genlayer-test && gltest tests/ -v`. The dispute/terminal
+  guarantee needs real elapsed time between purchase and evaluation, so
+  it's documented as an integration-mode run rather than faked in Direct
+  Mode — see the skipped test's docstring for the exact steps.
+- `pyproject.toml` — points `gltest` at the `contracts/` directory.
+- `TESTS.md` — narrative companion to the executable tests above.
 - `index.html` — a dependency-free frontend (`genlayer-js` only, no
   build step) for funding the pool, buying policies, triggering
   evaluations, and claiming payouts.
