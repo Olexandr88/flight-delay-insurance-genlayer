@@ -8,11 +8,11 @@ flight-status page.
 
 ## Deployed contract
 
-`0x5b3433B857619C2e126CA95c0cD28dC63E59Ac87` (GenLayer Studionet)
+`0xe22165f2439904b2D5A290C109634416b1E090cE` (GenLayer Studionet)
 
 ## Live demo
 
-https://courageous-otter-9bfc0e.netlify.app
+https://gleeful-otter-3929c3.netlify.app
 
 ## What it does
 
