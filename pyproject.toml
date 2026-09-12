@@ -1,0 +1,14 @@
+[project]
+name = "flight-delay-insurance-tests"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "genlayer-test",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.gltest]
+contracts_dir = "contracts"
