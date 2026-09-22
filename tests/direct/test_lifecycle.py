@@ -12,13 +12,14 @@ Run:
 import datetime
 
 import pytest
-from gltest import create_account
+from gltest import get_contract_factory, create_account
 from gltest.assertions import tx_execution_succeeded
 
 
 @pytest.fixture
-def contract(direct_deploy):
-    return direct_deploy("contracts/flight_delay_insurance.py")
+def contract():
+    factory = get_contract_factory("FlightDelayInsurance")
+    return factory.deploy()
 
 
 def _future_date(days=10):
@@ -35,17 +36,13 @@ def _advance(direct_vm, delta):
     the documented Direct Mode time-travel cheatcode. Some gltest
     releases don't propagate warp() into the datetime a contract sees via
     Python's datetime.datetime.now() inside GenVM execution, so this also
-    patches the underlying message datetime directly as a fallback —
-    the same workaround other public GenLayer projects use for this known
-    harness quirk.
+    patches the underlying message datetime directly as a fallback.
     """
     direct_vm.warp(delta)
     try:
         current = direct_vm.message_raw["datetime"]
         direct_vm.message_raw["datetime"] = current + delta
     except (AttributeError, KeyError, TypeError):
-        # Harness already propagated warp() correctly on its own — no
-        # fallback needed on this gltest version.
         pass
 
 
@@ -55,9 +52,9 @@ def _evaluate_with_verdict(contract, direct_vm, policy_id, verdict):
         r".*",
         f'{{"verdict": "{verdict}", "delay_minutes": 150, "reasoning": "mocked evidence confirms this flight and date"}}',
     )
-    result = contract.evaluate_flight(policy_id)
+    tx = contract.evaluate_flight(args=[policy_id]).transact()
     direct_vm.clear_mocks()
-    return result
+    return tx
 
 
 class TestTimingGuards:
@@ -67,32 +64,34 @@ class TestTimingGuards:
         alice = create_account()
         direct_vm.sender = alice
         with direct_vm.expect_revert("Coverage can only be purchased"):
-            contract.buy_policy("UA245", _past_date(), 30, value=5)
+            contract.buy_policy(args=["UA245", _past_date(), 30]).transact(value=5)
 
     def test_buy_policy_succeeds_for_future_date(self, contract, direct_vm):
         alice = create_account()
         direct_vm.sender = alice
-        tx = contract.buy_policy("UA245", _future_date(), 30, value=5)
+        tx = contract.buy_policy(args=["UA245", _future_date(), 30]).transact(value=5)
         assert tx_execution_succeeded(tx)
 
     def test_evaluate_reverts_before_departure(self, contract, direct_vm):
         alice = create_account()
         direct_vm.sender = alice
-        policy_id = contract.buy_policy("UA245", _future_date(), 30, value=5)
+        tx = contract.buy_policy(args=["UA245", _future_date(), 30]).transact(value=5)
+        policy_id = tx.return_value
         with direct_vm.expect_revert("This flight hasn't departed yet"):
-            contract.evaluate_flight(policy_id)
+            contract.evaluate_flight(args=[policy_id]).transact()
 
     def test_evaluate_succeeds_after_departure(self, contract, direct_vm):
         alice = create_account()
         direct_vm.sender = alice
         flight_date = _future_date(days=2)
-        policy_id = contract.buy_policy("UA245", flight_date, 30, value=5)
+        tx = contract.buy_policy(args=["UA245", flight_date, 30]).transact(value=5)
+        policy_id = tx.return_value
 
-        # Move the harness clock past the flight's date.
         _advance(direct_vm, datetime.timedelta(days=3))
 
-        result = _evaluate_with_verdict(contract, direct_vm, policy_id, "on_time")
-        assert result["status"] == "checked"
+        _evaluate_with_verdict(contract, direct_vm, policy_id, "on_time")
+        policy = contract.get_policy(args=[policy_id]).call()
+        assert policy["status"] == "checked"
 
 
 class TestEvidenceIsDerivedAndDateBound:
@@ -102,9 +101,10 @@ class TestEvidenceIsDerivedAndDateBound:
         alice = create_account()
         direct_vm.sender = alice
         flight_date = _future_date()
-        policy_id = contract.buy_policy("UA245", flight_date, 30, value=5)
+        tx = contract.buy_policy(args=["UA245", flight_date, 30]).transact(value=5)
+        policy_id = tx.return_value
 
-        policy = contract.get_policy(policy_id)
+        policy = contract.get_policy(args=[policy_id]).call()
         assert "UA245" in policy["status_url"]
         assert flight_date in policy["status_url"]
 
@@ -114,11 +114,11 @@ class TestEvidenceIsDerivedAndDateBound:
         date_a = _future_date(10)
         date_b = _future_date(20)
 
-        policy_a = contract.buy_policy("UA245", date_a, 30, value=5)
-        policy_b = contract.buy_policy("UA245", date_b, 30, value=5)
+        tx_a = contract.buy_policy(args=["UA245", date_a, 30]).transact(value=5)
+        tx_b = contract.buy_policy(args=["UA245", date_b, 30]).transact(value=5)
 
-        url_a = contract.get_policy(policy_a)["status_url"]
-        url_b = contract.get_policy(policy_b)["status_url"]
+        url_a = contract.get_policy(args=[tx_a.return_value]).call()["status_url"]
+        url_b = contract.get_policy(args=[tx_b.return_value]).call()["status_url"]
         assert url_a != url_b
 
 
@@ -134,25 +134,23 @@ class TestEvidenceAuthenticationBeforeAdjudication:
         alice = create_account()
         direct_vm.sender = alice
         flight_date = _future_date(days=2)
-        policy_id = contract.buy_policy("UA245", flight_date, 30, value=5)
+        tx = contract.buy_policy(args=["UA245", flight_date, 30]).transact(value=5)
+        policy_id = tx.return_value
 
         _advance(direct_vm, datetime.timedelta(days=3))
 
-        # The fetched page does NOT contain the flight number or date.
         direct_vm.mock_web(
             r".*", {"status": 200, "body": "this page confirms nothing useful"}
         )
-        # Even though the mocked LLM would say "delayed" if asked, the
-        # deterministic check must reject the evidence before the LLM is
-        # ever consulted.
         direct_vm.mock_llm(
             r".*",
             '{"verdict": "delayed", "delay_minutes": 200, "reasoning": "should never be used"}',
         )
-        result = contract.evaluate_flight(policy_id)
+        contract.evaluate_flight(args=[policy_id]).transact()
         direct_vm.clear_mocks()
 
-        assert result["verdict"] == "undetermined"
+        policy = contract.get_policy(args=[policy_id]).call()
+        assert policy["verdict"] == "undetermined"
 
 
 class TestSolvency:
@@ -162,42 +160,43 @@ class TestSolvency:
         alice = create_account()
         direct_vm.sender = alice
         with direct_vm.expect_revert("Insufficient pool liquidity"):
-            contract.buy_policy("UA100", _future_date(), 80, value=5)
+            contract.buy_policy(args=["UA100", _future_date(), 80]).transact(value=5)
 
     def test_funded_purchase_within_liquidity_succeeds(self, contract, direct_vm):
         alice = create_account()
         direct_vm.sender = alice
-        contract.fund_pool(value=100)
-        tx = contract.buy_policy("UA100", _future_date(), 80, value=10)
+        contract.fund_pool(args=[]).transact(value=100)
+        tx = contract.buy_policy(args=["UA100", _future_date(), 80]).transact(value=10)
         assert tx_execution_succeeded(tx)
-        assert contract.available_liquidity() == 30  # 110 pool - 80 reserved
+        assert contract.available_liquidity(args=[]).call() == 30  # 110 - 80
 
     def test_second_purchase_beyond_liquidity_reverts(self, contract, direct_vm):
         alice = create_account()
         direct_vm.sender = alice
-        contract.fund_pool(value=100)
-        contract.buy_policy("UA100", _future_date(), 80, value=10)
+        contract.fund_pool(args=[]).transact(value=100)
+        contract.buy_policy(args=["UA100", _future_date(), 80]).transact(value=10)
         with direct_vm.expect_revert("Insufficient pool liquidity"):
-            contract.buy_policy("UA200", _future_date(), 50, value=5)
+            contract.buy_policy(args=["UA200", _future_date(), 50]).transact(value=5)
 
     def test_settled_on_time_policy_releases_reservation(self, contract, direct_vm):
         alice = create_account()
         direct_vm.sender = alice
-        contract.fund_pool(value=100)
+        contract.fund_pool(args=[]).transact(value=100)
         flight_date = _future_date(days=2)
-        policy_id = contract.buy_policy("UA100", flight_date, 80, value=10)
-        assert contract.available_liquidity() == 30
+        tx = contract.buy_policy(args=["UA100", flight_date, 80]).transact(value=10)
+        policy_id = tx.return_value
+        assert contract.available_liquidity(args=[]).call() == 30
 
         _advance(direct_vm, datetime.timedelta(days=3))
         _evaluate_with_verdict(contract, direct_vm, policy_id, "on_time")
         _evaluate_with_verdict(contract, direct_vm, policy_id, "on_time")
 
-        policy = contract.get_policy(policy_id)
+        policy = contract.get_policy(args=[policy_id]).call()
         assert policy["status"] == "settled"
 
         direct_vm.sender = alice
-        contract.claim_payout(policy_id)
-        assert contract.available_liquidity() == 110  # reservation released
+        contract.claim_payout(args=[policy_id]).transact()
+        assert contract.available_liquidity(args=[]).call() == 110
 
 
 class TestLifecycleTerminalStates:
@@ -208,29 +207,23 @@ class TestLifecycleTerminalStates:
         bob = create_account()
 
         direct_vm.sender = alice
-        contract.fund_pool(value=100)
+        contract.fund_pool(args=[]).transact(value=100)
         flight_date = _future_date(days=2)
-        policy_id = contract.buy_policy("UA300", flight_date, 30, value=5)
+        tx = contract.buy_policy(args=["UA300", flight_date, 30]).transact(value=5)
+        policy_id = tx.return_value
 
         direct_vm.sender = bob
-
         _advance(direct_vm, datetime.timedelta(days=3))
 
-        # First evaluation: "delayed" -> status "checked".
         _evaluate_with_verdict(contract, direct_vm, policy_id, "delayed")
-
-        # Second evaluation disagrees: "on_time" -> status "disputed".
         _evaluate_with_verdict(contract, direct_vm, policy_id, "on_time")
-        policy = contract.get_policy(policy_id)
+        policy = contract.get_policy(args=[policy_id]).call()
         assert policy["status"] == "disputed"
 
-        # Policyholder (alice) claims a full premium refund while disputed.
         direct_vm.sender = alice
-        payout = contract.claim_payout(policy_id)
-        assert payout == 5  # full premium refunded
+        tx = contract.claim_payout(args=[policy_id]).transact()
+        assert tx.return_value == 5
 
-        # Even with evidence that would resolve cleanly, evaluate_flight()
-        # must still revert now that the policy is disputed and refunded.
         with direct_vm.expect_revert("Policy already settled"):
             _evaluate_with_verdict(contract, direct_vm, policy_id, "delayed")
 
@@ -239,15 +232,16 @@ class TestLifecycleTerminalStates:
     ):
         alice = create_account()
         direct_vm.sender = alice
-        contract.fund_pool(value=100)
+        contract.fund_pool(args=[]).transact(value=100)
         flight_date = _future_date(days=2)
-        policy_id = contract.buy_policy("UA400", flight_date, 30, value=5)
+        tx = contract.buy_policy(args=["UA400", flight_date, 30]).transact(value=5)
+        policy_id = tx.return_value
 
         _advance(direct_vm, datetime.timedelta(days=3))
 
         _evaluate_with_verdict(contract, direct_vm, policy_id, "on_time")
         _evaluate_with_verdict(contract, direct_vm, policy_id, "on_time")
-        policy = contract.get_policy(policy_id)
+        policy = contract.get_policy(args=[policy_id]).call()
         assert policy["status"] == "settled"
 
         with direct_vm.expect_revert("Policy already settled"):
