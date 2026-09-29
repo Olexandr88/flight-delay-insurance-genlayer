@@ -1,100 +1,50 @@
-# Lifecycle Tests
+# Tests
 
-The authoritative tests live in
-[`tests/direct/test_lifecycle.py`](./tests/direct/test_lifecycle.py) —
-real, executable pytest tests using GenLayer's official testing suite
-(`genlayer-test` / `gltest`) in Direct Mode.
+All guarantees below are verified by executable tests in
+[`tests/direct/test_lifecycle.py`](tests/direct/test_lifecycle.py), which run
+the contract in GenLayer's Direct Mode (`genlayer-test` / `gltest`). Web and
+LLM responses are mocked and the harness clock is controlled, so the suite is
+deterministic.
 
+```bash
+gltest tests/ -v      # expected: 14 passed
 ```
-pip install genlayer-test
-gltest tests/ -v
-```
 
-Every guarantee below runs as an actual test against the deployed
-contract code — timing guards, evidence-URL derivation, evidence
-authentication, solvency, and the disputed/terminal lifecycle. The
-timing-gated guarantees (evaluation only after departure, dispute
-happening after real elapsed time) use `direct_vm.warp(...)` to advance
-the harness's clock, so `evaluate_flight()` can genuinely run past the
-departure-timing guard within a single Direct Mode test run — no real
-wall-clock waiting, and no skipped tests standing in for coverage that
-isn't actually exercised.
+Setup instructions, including a required one-time workaround for
+`genlayer-test` 0.29.2, are in the [README](README.md#running-the-tests).
 
-## Test 1 — Timing: purchase only before departure, evaluation only after
+## Guarantees and the tests that verify them
 
-1. `buy_policy("UA245", "2020-01-01", payout_amount)` (a date in the
-   past) with GEN attached → **must revert**: "Coverage can only be
-   purchased for a flight that hasn't departed yet."
-2. `buy_policy("UA245", "<future date>", payout_amount)` with GEN
-   attached → succeeds. Status `pending`.
-3. `evaluate_flight(policy_id)` called immediately (flight date still in
-   the future) → **must revert**: "This flight hasn't departed yet."
-4. `direct_vm.warp(timedelta(days=3))` advances the harness clock past
-   the flight's date, then `evaluate_flight(policy_id)` → succeeds,
-   moving the policy to `checked`.
+### Timing: purchase only before departure, evaluation only after
 
-Expected result: steps 1 and 3 both revert; step 4 demonstrates the same
-policy can be evaluated once real time (simulated via `warp`) has passed.
+| Test | What it checks |
+| --- | --- |
+| `test_buy_policy_rejects_past_date` | Buying coverage for a past date reverts |
+| `test_buy_policy_succeeds_for_future_date` | Buying for a future date creates a `pending` policy |
+| `test_evaluate_reverts_before_departure` | Evaluating before the flight date reverts |
+| `test_evaluate_succeeds_after_departure` | After the clock passes the flight date, evaluation succeeds and the policy becomes `checked` |
 
-## Test 2 — Evidence: derived from flight + date, and authenticated before adjudication
+### Evidence: derived source, bound to flight number and date
 
-1. Call `buy_policy("UA245", "<future date>", payout_amount)` — the
-   function signature doesn't accept a `status_url` parameter at all.
-2. `get_policy(policy_id).status_url` → returns
-   `https://www.flightaware.com/live/flight/UA245/history/<that date>`,
-   built entirely from `flight_number` **and** `flight_date` together.
-   Buying the same flight for a different date produces a different URL.
-3. After warping past the flight date, `evaluate_flight(policy_id)`
-   fetches `status_url`. A deterministic check — plain code, not the LLM —
-   verifies the fetched page actually contains both the flight number
-   and the date.
-4. When the mocked evidence page contains neither (a page that clearly
-   does not confirm the flight), the result is `verdict: "undetermined"`
-   — even when the mocked LLM is deliberately configured to say
-   `"delayed"`, proving the deterministic check runs and can override the
-   LLM's output, not just precede it in the code.
+| Test | What it checks |
+| --- | --- |
+| `test_status_url_is_derived_from_flight_and_date` | The stored `status_url` contains both the flight number and the date |
+| `test_different_dates_produce_different_urls` | The same flight on two dates yields two different URLs |
+| `test_mismatched_evidence_yields_undetermined_without_llm` | A page with the right flight number but a different date yields `undetermined` and never reaches the LLM |
 
-Expected result: the evidence source is fully derived and date-bound, and
-a page failing to confirm both fields is rejected deterministically
-before any LLM judgment — tested directly against the contract, not
-just documented.
+### Solvency: payouts are reserved, unfunded coverage is rejected
 
-## Test 3 — Solvency: payouts are reserved, unfunded coverage is rejected
+| Test | What it checks |
+| --- | --- |
+| `test_unfunded_purchase_reverts` | A policy the pool cannot cover reverts |
+| `test_funded_purchase_within_liquidity_succeeds` | A funded pool accepts the policy and available liquidity drops by the reserved payout |
+| `test_second_purchase_beyond_liquidity_reverts` | A second policy that would exceed remaining liquidity reverts |
+| `test_settled_on_time_policy_releases_reservation` | An `on_time` policy settles, and claiming releases its reservation while the premium stays in the pool |
+| `test_delayed_settled_policy_pays_full_payout` | A `delayed` policy settles, pays the full `payout_amount`, and cannot be claimed twice |
 
-1. Deploy fresh, then `fund_pool()` with `100` GEN.
-2. `buy_policy("UA100", "<future date>", payout_amount=80)` with a `10`
-   GEN premium → succeeds. `pool_balance` is now `110`;
-   `reserved_total` is `80`; `available_liquidity()` returns `30`.
-3. `buy_policy("UA200", "<future date>", payout_amount=50)` with a `5`
-   GEN premium → **must revert**: "Insufficient pool liquidity to cover
-   this payout." (`available_liquidity()` was `30`, but `50` was
-   requested.)
-4. After warping past the flight date and settling the first policy as
-   `on_time` (two matching `evaluate_flight()` calls), `claim_payout()`
-   on it pays out `0` and releases its `80` GEN reservation —
-   `available_liquidity()` returns to `110`.
+### Lifecycle: `settled` and `disputed` are terminal
 
-Expected result: step 3 reverts because the pool can't cover every open
-promise at once; step 4 shows a settled policy's reservation freeing up
-capacity for future policies — both asserted directly against contract
-state, not just described.
-
-## Test 4 — Lifecycle: settled and disputed are both terminal
-
-1. Buy a policy, warp past its flight date, get it to `checked` (one
-   `evaluate_flight()` call).
-2. `evaluate_flight()` again with a disagreeing verdict → status becomes
-   `disputed`.
-3. `claim_payout()` from the policyholder → refunds the premium in full.
-4. `evaluate_flight()` again on the same policy, even with evidence that
-   would clearly resolve it → **must revert**: "Policy already
-   settled..." This holds even though a refund has already been paid
-   out.
-5. Separately, a different policy is warped past its date, settled with
-   two matching evaluations (`settled`), and `evaluate_flight()` is
-   called on it again → **must also revert**, for the same reason.
-
-Expected result: once a policy leaves `checked` for either `settled` or
-`disputed`, `evaluate_flight()` reverts unconditionally — verified by
-actually calling it again after settlement/refund and asserting the
-revert, not by a documented-but-unexecuted scenario.
+| Test | What it checks |
+| --- | --- |
+| `test_disputed_then_refund_then_evaluate_reverts` | Conflicting verdicts move the policy to `disputed`; the premium is refunded on claim; re-evaluation afterwards reverts |
+| `test_settled_policy_rejects_further_evaluation_regression` | After two matching verdicts the policy is `settled` with two confirmations; further evaluation reverts |
