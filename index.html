@@ -75,6 +75,39 @@ h1 span{display:block; font-size:12px; letter-spacing:0.14em; color:var(--ink-so
 }
 .contract-id b{color:var(--ink); font-weight:500;}
 .contract-id a{color:var(--stamp-green); text-decoration:none; border-bottom:1px dotted var(--stamp-green);}
+
+/* --- nav tabs --- */
+nav.pages{
+  display:flex;
+  gap:4px;
+  margin:18px 0 26px;
+  border-bottom:1px solid var(--rule);
+  flex-wrap:wrap;
+}
+nav.pages a{
+  font-family:'Special Elite', monospace;
+  font-size:11.5px;
+  letter-spacing:0.06em;
+  text-transform:uppercase;
+  color:var(--ink-soft);
+  text-decoration:none;
+  padding:9px 14px;
+  border:1px solid transparent;
+  border-bottom:none;
+  border-radius:4px 4px 0 0;
+  position:relative;
+  top:1px;
+}
+nav.pages a.active{
+  color:var(--ink);
+  background:rgba(255,255,255,0.55);
+  border-color:var(--rule);
+  border-bottom:1px solid var(--paper-dark);
+}
+nav.pages a:hover{color:var(--ink);}
+.page{display:none;}
+.page.active{display:block;}
+
 .lede{
   font-size:15.5px;
   line-height:1.6;
@@ -154,6 +187,7 @@ h1 span{display:block; font-size:12px; letter-spacing:0.14em; color:var(--ink-so
 .btn:disabled{opacity:0.45; cursor:not-allowed;}
 .btn.primary{ border-color:var(--tag-blue); color:var(--tag-blue); }
 .btn.primary:hover{background:var(--tag-blue); color:#fff;}
+.btn.small{font-size:11px; padding:6px 12px;}
 .btn-row{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:6px;}
 .status-line{
   font-family:'IBM Plex Mono', monospace;
@@ -163,20 +197,52 @@ h1 span{display:block; font-size:12px; letter-spacing:0.14em; color:var(--ink-so
 }
 .status-line.err{color:var(--stamp-red);}
 .status-line.ok{color:var(--stamp-green);}
-.account-strip{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  flex-wrap:wrap;
-  gap:10px;
+
+/* --- account box (the fix) --- */
+.account-box{
+  border:1px solid var(--rule);
+  border-radius:4px;
+  background:rgba(255,255,255,0.5);
+  padding:14px 16px;
+  margin-top:16px;
   font-family:'IBM Plex Mono', monospace;
   font-size:11.5px;
   color:var(--ink-soft);
-  border-top:1px dashed var(--rule);
-  margin-top:16px;
-  padding-top:14px;
 }
-.account-strip a{color:var(--stamp-amber); text-decoration:none; border-bottom:1px dotted var(--stamp-amber);}
+.account-box .row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.account-box .addr{
+  flex:1 1 auto;
+  min-width:200px;
+  background:var(--paper);
+  border:1px solid var(--rule);
+  border-radius:3px;
+  padding:8px 10px;
+  color:var(--ink);
+  word-break:break-all;
+  user-select:all;
+}
+.account-box .no-account{font-style:italic;}
+.copy-btn{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  border:1px solid var(--rule);
+  background:var(--paper);
+  color:var(--ink);
+  padding:7px 10px;
+  border-radius:3px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.copy-btn:hover{border-color:var(--tag-blue); color:var(--tag-blue);}
+.copy-btn.copied{border-color:var(--stamp-green); color:var(--stamp-green);}
+.account-box .hint{margin-top:8px; font-size:11px;}
+.account-box .hint a{color:var(--stamp-amber); text-decoration:none; border-bottom:1px dotted var(--stamp-amber);}
+
 .docket h2{
   font-family:'Special Elite', monospace;
   font-size:15px;
@@ -266,6 +332,18 @@ h1 span{display:block; font-size:12px; letter-spacing:0.14em; color:var(--ink-so
   border:1px dashed var(--rule);
   border-radius:4px;
 }
+.activity-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11.5px;
+  color:var(--ink-soft);
+  border-bottom:1px dashed var(--rule);
+  padding:9px 2px;
+  flex-wrap:wrap;
+}
+.activity-row b{color:var(--ink); font-weight:500;}
 footer.foot{
   max-width:880px;
   margin:22px auto 0;
@@ -290,63 +368,129 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
       </div>
     </header>
 
-    <p class="lede">Buy coverage for a specific flight. If it lands 2+ hours late, GenLayer validators confirm it by reading a live flight-status page and you get paid automatically — no claims adjuster, no paperwork.</p>
+    <nav class="pages">
+      <a href="#/" data-page="home">Home</a>
+      <a href="#/buy" data-page="buy">Buy Policy</a>
+      <a href="#/explorer" data-page="explorer">Explorer</a>
+      <a href="#/dispute" data-page="dispute">Dispute</a>
+      <a href="#/activity" data-page="activity">Activity</a>
+    </nav>
 
-    <div class="pool-strip">
-      <span>Shared payout pool: <span class="amt" id="poolAmount">…</span> GEN <span style="font-size:11px; color:var(--ink-soft);">(<span id="availableAmount">…</span> GEN available, unreserved)</span></span>
-      <span id="fundLine">
-        <input id="fundAmount" type="text" placeholder="GEN amount" style="width:110px; font-family:'IBM Plex Mono',monospace; font-size:12px; padding:5px 8px; border:1px solid var(--rule); border-radius:3px; background:var(--paper);" />
-        <button class="btn" id="fundBtn" style="font-size:11px; padding:6px 12px;">Back the pool</button>
-      </span>
+    <!-- shared account box, visible on every page -->
+    <div class="account-box">
+      <div class="row">
+        <span id="noAccountMsg" class="no-account">No test account loaded yet.</span>
+        <span id="addrRow" class="row" style="display:none; flex:1;">
+          <span class="addr" id="fullAddress"></span>
+          <button class="copy-btn" id="copyAddrBtn">Copy address</button>
+        </span>
+        <button class="btn small" id="genAcctBtn">Generate test account</button>
+      </div>
+      <div class="hint">Need test GEN? <a id="faucetLink" href="https://studio.genlayer.com/contracts" target="_blank" rel="noopener">open the Studio faucet →</a>, paste the address above, and request funds.</div>
     </div>
 
-    <section class="panel">
-      <h2>Buy a Policy</h2>
-      <div class="row2">
-        <div class="field">
-          <label for="flightNumber">Flight number</label>
-          <input id="flightNumber" type="text" placeholder="e.g. UA245" />
-        </div>
-        <div class="field">
-          <label for="flightDate">Flight date (must be in the future)</label>
-          <input id="flightDate" type="text" placeholder="e.g. 2026-09-20" />
-        </div>
-      </div>
-      <p style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); margin:-4px 0 16px;">
-        The evidence source is derived automatically from the flight number (a public FlightAware page) — not something you choose, so it can't be pointed at a page you control.
-      </p>
-      <div class="row2">
-        <div class="field">
-          <label for="payoutAmount">Payout if delayed (GEN)</label>
-          <input id="payoutAmount" type="text" placeholder="e.g. 30" />
-        </div>
-        <div class="field">
-          <label for="premiumAmount">Premium to pay now (GEN)</label>
-          <input id="premiumAmount" type="text" placeholder="e.g. 5" />
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn primary" id="buyBtn">Buy Policy</button>
-        <span class="status-line" id="buyStatus"></span>
-      </div>
-      <div class="account-strip">
-        <span id="acctLine">No account loaded.</span>
-        <span>
-          <button class="btn" id="genAcctBtn" style="font-size:11px; padding:6px 12px;">Generate test account</button>
-          <a id="faucetLink" href="https://studio.genlayer.com/contracts" target="_blank" rel="noopener">fund via Studio faucet →</a>
+    <!-- ============ HOME ============ -->
+    <section class="page" data-page="home">
+      <p class="lede">Buy coverage for a specific flight. If it lands 2+ hours late, GenLayer validators confirm it by reading a live flight-status page and you get paid automatically — no claims adjuster, no paperwork.</p>
+
+      <div class="pool-strip">
+        <span>Shared payout pool: <span class="amt" id="poolAmount">…</span> GEN <span style="font-size:11px; color:var(--ink-soft);">(<span id="availableAmount">…</span> GEN available, unreserved)</span></span>
+        <span id="fundLine">
+          <input id="fundAmount" type="text" placeholder="GEN amount" style="width:110px; font-family:'IBM Plex Mono',monospace; font-size:12px; padding:5px 8px; border:1px solid var(--rule); border-radius:3px; background:var(--paper);" />
+          <button class="btn small" id="fundBtn">Back the pool</button>
         </span>
+      </div>
+
+      <div class="panel">
+        <h2>How it works</h2>
+        <p style="font-size:14px; line-height:1.6; color:var(--ink-soft); margin:0;">
+          1. Generate a test account and fund it via the Studio faucet.<br>
+          2. Back the pool, or jump straight to <a href="#/buy">Buy a Policy</a>.<br>
+          3. After departure, evaluate the flight — validators read a live status page and agree on a verdict.<br>
+          4. Claim your payout (or refund) once the policy is settled.
+        </p>
       </div>
     </section>
 
-    <section class="docket">
-      <h2>Policies <small id="policyCount">loading…</small></h2>
-      <div id="policyList">
-        <div class="empty">Reading the policy book…</div>
-      </div>
-      <div class="btn-row">
-        <button class="btn" id="refreshBtn">Refresh</button>
-      </div>
+    <!-- ============ BUY ============ -->
+    <section class="page" data-page="buy">
+      <section class="panel">
+        <h2>Buy a Policy</h2>
+        <div class="row2">
+          <div class="field">
+            <label for="flightNumber">Flight number</label>
+            <input id="flightNumber" type="text" placeholder="e.g. UA245" />
+          </div>
+          <div class="field">
+            <label for="flightDate">Flight date (must be in the future)</label>
+            <input id="flightDate" type="text" placeholder="e.g. 2026-09-20" />
+          </div>
+        </div>
+        <p style="font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); margin:-4px 0 16px;">
+          The evidence source is derived automatically from the flight number and date (a public FlightAware page) — not something you choose, so it can't be pointed at a page you control.
+        </p>
+        <div class="row2">
+          <div class="field">
+            <label for="payoutAmount">Payout if delayed (GEN)</label>
+            <input id="payoutAmount" type="text" placeholder="e.g. 30" />
+          </div>
+          <div class="field">
+            <label for="premiumAmount">Premium to pay now (GEN)</label>
+            <input id="premiumAmount" type="text" placeholder="e.g. 5" />
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn primary" id="buyBtn">Buy Policy</button>
+          <span class="status-line" id="buyStatus"></span>
+        </div>
+      </section>
     </section>
+
+    <!-- ============ EXPLORER ============ -->
+    <section class="page" data-page="explorer">
+      <section class="docket">
+        <h2>All Policies <small id="policyCount">loading…</small></h2>
+        <div id="policyList">
+          <div class="empty">Reading the policy book…</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn small" id="refreshBtn">Refresh</button>
+        </div>
+      </section>
+    </section>
+
+    <!-- ============ DISPUTE ============ -->
+    <section class="page" data-page="dispute">
+      <section class="docket">
+        <h2>Disputed Policies <small id="disputeCount">loading…</small></h2>
+        <p style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); margin:-6px 0 18px;">
+          A policy lands here when two consecutive evaluations disagree on the verdict. Disputed policies are terminal — the premium is refunded in full and the reservation is released back to the pool.
+        </p>
+        <div id="disputeList">
+          <div class="empty">Reading the policy book…</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn small" id="refreshDisputeBtn">Refresh</button>
+        </div>
+      </section>
+    </section>
+
+    <!-- ============ ACTIVITY ============ -->
+    <section class="page" data-page="activity">
+      <section class="docket">
+        <h2>Your Activity <small id="activityCount"></small></h2>
+        <p style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); margin:-6px 0 18px;">
+          Actions you've taken with the test account currently loaded in this browser (stored locally, not on-chain).
+        </p>
+        <div id="activityList">
+          <div class="empty">No activity yet. Generate an account and buy a policy to get started.</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn small" id="clearActivityBtn">Clear local activity</button>
+        </div>
+      </section>
+    </section>
+
   </div>
 </div>
 
@@ -372,16 +516,35 @@ document.getElementById("explorerLink").href =
 let readClient;
 let account = null;
 let writeClient = null;
+let latestPolicies = []; // cache for explorer/dispute/activity pages
 
+/* ---------------- routing ---------------- */
+const ROUTES = ["home", "buy", "explorer", "dispute", "activity"];
+function currentRoute() {
+  const hash = (location.hash || "#/").replace(/^#\/?/, "");
+  return ROUTES.includes(hash) ? hash : "home";
+}
+function renderRoute() {
+  const route = currentRoute();
+  document.querySelectorAll(".page").forEach((el) => {
+    el.classList.toggle("active", el.dataset.page === route);
+  });
+  document.querySelectorAll("nav.pages a").forEach((a) => {
+    a.classList.toggle("active", a.dataset.page === route);
+  });
+  if (route === "explorer") loadPolicies();
+  if (route === "dispute") loadPolicies();
+  if (route === "activity") renderActivity();
+  if (route === "home" || route === "buy") loadPool();
+}
+window.addEventListener("hashchange", renderRoute);
+
+/* ---------------- helpers ---------------- */
 function setStatus(el, msg, kind) {
   el.textContent = msg || "";
   el.className = "status-line" + (kind ? " " + kind : "");
 }
-
 function genToWei(amountGen) {
-  // GEN uses 18 decimals, like ETH/wei. Multiply in two steps to dodge
-  // JS float precision loss beyond 1e6 GEN, which is far more than any
-  // demo amount needs.
   return BigInt(Math.round(amountGen * 1e6)) * 1000000000000n;
 }
 function genFmt(weiValue) {
@@ -396,7 +559,6 @@ function genFmt(weiValue) {
     return "0";
   }
 }
-
 function statusBadgeClass(status) {
   if (status === "settled") return "status-badge settled";
   if (status === "disputed") return "status-badge disputed";
@@ -429,6 +591,44 @@ function escapeHtml(s) {
 function escapeAttr(s) { return escapeHtml(s); }
 function shorten(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
 
+/* ---------------- local activity log ---------------- */
+function activityKey() {
+  return account ? "fdi_activity_" + account.address.toLowerCase() : null;
+}
+function logActivity(action, detail) {
+  const key = activityKey();
+  if (!key) return;
+  const list = JSON.parse(localStorage.getItem(key) || "[]");
+  list.unshift({ action, detail, ts: Date.now() });
+  localStorage.setItem(key, JSON.stringify(list.slice(0, 100)));
+}
+function renderActivity() {
+  const listEl = document.getElementById("activityList");
+  const countEl = document.getElementById("activityCount");
+  const key = activityKey();
+  if (!key) {
+    listEl.innerHTML = '<div class="empty">Generate a test account to see activity for it.</div>';
+    countEl.textContent = "";
+    return;
+  }
+  const items = JSON.parse(localStorage.getItem(key) || "[]");
+  countEl.textContent = items.length ? items.length + " actions" : "";
+  if (!items.length) {
+    listEl.innerHTML = '<div class="empty">No activity yet. Buy a policy to get started.</div>';
+    return;
+  }
+  listEl.innerHTML = items.map((it) => {
+    const d = new Date(it.ts).toLocaleString();
+    return `<div class="activity-row"><span><b>${escapeHtml(it.action)}</b> — ${escapeHtml(it.detail)}</span><span>${escapeHtml(d)}</span></div>`;
+  }).join("");
+}
+document.getElementById("clearActivityBtn").addEventListener("click", () => {
+  const key = activityKey();
+  if (key) localStorage.removeItem(key);
+  renderActivity();
+});
+
+/* ---------------- contract reads ---------------- */
 async function initReadClient() {
   readClient = createClient({ chain: STUDIO_CHAIN });
 }
@@ -436,15 +636,11 @@ async function initReadClient() {
 async function loadPool() {
   try {
     const bal = await readClient.readContract({
-      address: CONTRACT,
-      functionName: "get_pool_balance",
-      args: [],
+      address: CONTRACT, functionName: "get_pool_balance", args: [],
     });
     document.getElementById("poolAmount").textContent = genFmt(bal);
     const available = await readClient.readContract({
-      address: CONTRACT,
-      functionName: "available_liquidity",
-      args: [],
+      address: CONTRACT, functionName: "available_liquidity", args: [],
     });
     document.getElementById("availableAmount").textContent = genFmt(available);
   } catch (e) {
@@ -454,44 +650,49 @@ async function loadPool() {
   }
 }
 
+async function fetchAllPolicies() {
+  const total = await readClient.readContract({
+    address: CONTRACT, functionName: "total_policies", args: [],
+  });
+  const n = Number(total);
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) {
+    try {
+      const p = await readClient.readContract({
+        address: CONTRACT, functionName: "get_policy", args: [i],
+      });
+      out.push({ id: i, ...p });
+    } catch (e) {
+      console.warn("could not read policy", i, e);
+    }
+  }
+  latestPolicies = out;
+  return out;
+}
+
 async function loadPolicies() {
-  const list = document.getElementById("policyList");
-  const count = document.getElementById("policyCount");
+  const route = currentRoute();
+  const list = document.getElementById(route === "dispute" ? "disputeList" : "policyList");
+  const countEl = document.getElementById(route === "dispute" ? "disputeCount" : "policyCount");
+  if (!list) return;
   list.innerHTML = '<div class="empty">Reading the policy book…</div>';
   try {
-    const total = await readClient.readContract({
-      address: CONTRACT,
-      functionName: "total_policies",
-      args: [],
-    });
-    const n = Number(total);
-    count.textContent = n + (n === 1 ? " policy" : " policies");
+    const all = await fetchAllPolicies();
+    const data = route === "dispute" ? all.filter((p) => p.status === "disputed") : all;
 
-    if (n === 0) {
-      list.innerHTML = '<div class="empty">No policies yet. Be the first to buy coverage.</div>';
+    countEl.textContent = data.length + (data.length === 1 ? " policy" : " policies");
+    if (!data.length) {
+      list.innerHTML = route === "dispute"
+        ? '<div class="empty">No disputed policies right now.</div>'
+        : '<div class="empty">No policies yet. Be the first to buy coverage.</div>';
       return;
     }
-
-    const cards = [];
-    for (let i = n - 1; i >= 0; i--) {
-      try {
-        const p = await readClient.readContract({
-          address: CONTRACT,
-          functionName: "get_policy",
-          args: [i],
-        });
-        cards.push(renderPolicy(i, p));
-      } catch (e) {
-        console.warn("could not read policy", i, e);
-      }
-    }
-    list.innerHTML = cards.join("") || '<div class="empty">Policy book is empty.</div>';
+    list.innerHTML = data.map((p) => renderPolicy(p.id, p)).join("");
     attachHandlers();
   } catch (e) {
     console.error(e);
-    list.innerHTML =
-      '<div class="empty">Could not reach the contract right now. Contract: ' + CONTRACT + '</div>';
-    count.textContent = "";
+    list.innerHTML = '<div class="empty">Could not reach the contract right now. Contract: ' + CONTRACT + '</div>';
+    countEl.textContent = "";
   }
 }
 
@@ -514,8 +715,8 @@ function renderPolicy(id, p) {
         ${p.delay_minutes ? `<span>Delay: ${p.delay_minutes} min</span>` : ""}
       </div>
       <div class="actions">
-        ${canEvaluate ? `<button class="btn evaluate-btn" data-id="${id}" style="font-size:11px; padding:6px 12px;">Evaluate flight</button>` : ""}
-        ${canClaim && !p.claimed ? `<button class="btn primary claim-btn" data-id="${id}" style="font-size:11px; padding:6px 12px;">Claim payout</button>` : ""}
+        ${canEvaluate ? `<button class="btn small evaluate-btn" data-id="${id}">Evaluate flight</button>` : ""}
+        ${canClaim && !p.claimed ? `<button class="btn primary small claim-btn" data-id="${id}">Claim payout</button>` : ""}
         ${p.claimed ? `<span class="status-line ok">Claimed</span>` : ""}
       </div>
     </div>
@@ -534,6 +735,7 @@ function attachHandlers() {
           account, address: CONTRACT, functionName: "evaluate_flight", args: [id], value: 0,
         });
         await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+        logActivity("Evaluated flight", "Policy #" + id);
         await loadPolicies();
       } catch (e) {
         console.error(e);
@@ -555,6 +757,7 @@ function attachHandlers() {
           account, address: CONTRACT, functionName: "claim_payout", args: [id], value: 0,
         });
         await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+        logActivity("Claimed payout", "Policy #" + id);
         await loadPolicies();
         await loadPool();
       } catch (e) {
@@ -567,11 +770,41 @@ function attachHandlers() {
   });
 }
 
+/* ---------------- account (THE FIX) ---------------- */
 document.getElementById("genAcctBtn").addEventListener("click", () => {
   account = createAccount();
   writeClient = createClient({ chain: STUDIO_CHAIN, account });
-  document.getElementById("acctLine").innerHTML =
-    "Signing as <b>" + account.address.slice(0, 8) + "…" + account.address.slice(-4) + "</b>";
+
+  document.getElementById("noAccountMsg").style.display = "none";
+  const addrRow = document.getElementById("addrRow");
+  addrRow.style.display = "flex";
+  document.getElementById("fullAddress").textContent = account.address;
+
+  renderActivity();
+});
+
+document.getElementById("copyAddrBtn").addEventListener("click", async () => {
+  if (!account) return;
+  const btn = document.getElementById("copyAddrBtn");
+  try {
+    await navigator.clipboard.writeText(account.address);
+  } catch {
+    // fallback for browsers without async clipboard permission
+    const el = document.getElementById("fullAddress");
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    document.execCommand("copy");
+    sel.removeAllRanges();
+  }
+  btn.textContent = "Copied!";
+  btn.classList.add("copied");
+  setTimeout(() => {
+    btn.textContent = "Copy address";
+    btn.classList.remove("copied");
+  }, 1800);
 });
 
 document.getElementById("fundBtn").addEventListener("click", async () => {
@@ -583,6 +816,7 @@ document.getElementById("fundBtn").addEventListener("click", async () => {
       account, address: CONTRACT, functionName: "fund_pool", args: [], value: genToWei(amountGen),
     });
     await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+    logActivity("Backed the pool", amountGen + " GEN");
     document.getElementById("fundAmount").value = "";
     await loadPool();
   } catch (e) {
@@ -599,7 +833,7 @@ document.getElementById("buyBtn").addEventListener("click", async () => {
   const premiumGen = parseFloat(document.getElementById("premiumAmount").value || "0");
 
   if (!flight_number || !flight_date) {
-    setStatus(statusEl, "Fill in the flight number, date, and status URL.", "err");
+    setStatus(statusEl, "Fill in the flight number and date.", "err");
     return;
   }
   if (!payoutGen || payoutGen <= 0 || !premiumGen || premiumGen <= 0) {
@@ -623,11 +857,11 @@ document.getElementById("buyBtn").addEventListener("click", async () => {
     });
     await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
     setStatus(statusEl, "Policy purchased.", "ok");
+    logActivity("Bought policy", flight_number + " on " + flight_date);
     document.getElementById("flightNumber").value = "";
     document.getElementById("flightDate").value = "";
     document.getElementById("payoutAmount").value = "";
     document.getElementById("premiumAmount").value = "";
-    await loadPolicies();
     await loadPool();
   } catch (e) {
     console.error(e);
@@ -637,14 +871,11 @@ document.getElementById("buyBtn").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("refreshBtn").addEventListener("click", () => {
-  loadPolicies();
-  loadPool();
-});
+document.getElementById("refreshBtn")?.addEventListener("click", loadPolicies);
+document.getElementById("refreshDisputeBtn")?.addEventListener("click", loadPolicies);
 
 initReadClient().then(() => {
-  loadPool();
-  loadPolicies();
+  renderRoute();
 });
 </script>
 </body>
