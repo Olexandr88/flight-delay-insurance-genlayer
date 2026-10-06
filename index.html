@@ -383,6 +383,7 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
         <span id="addrRow" class="row" style="display:none; flex:1;">
           <span class="addr" id="fullAddress"></span>
           <button class="copy-btn" id="copyAddrBtn">Copy address</button>
+          <button class="copy-btn" id="forgetAcctBtn" title="Generate a different test account">New account</button>
         </span>
         <button class="btn small" id="genAcctBtn">Generate test account</button>
       </div>
@@ -771,8 +772,10 @@ function attachHandlers() {
 }
 
 /* ---------------- account (THE FIX) ---------------- */
-document.getElementById("genAcctBtn").addEventListener("click", () => {
-  account = createAccount();
+const ACCOUNT_STORAGE_KEY = "fdi_test_account_private_key";
+
+function activateAccount(acct) {
+  account = acct;
   writeClient = createClient({ chain: STUDIO_CHAIN, account });
 
   document.getElementById("noAccountMsg").style.display = "none";
@@ -781,7 +784,42 @@ document.getElementById("genAcctBtn").addEventListener("click", () => {
   document.getElementById("fullAddress").textContent = account.address;
 
   renderActivity();
+}
+
+document.getElementById("genAcctBtn").addEventListener("click", () => {
+  const acct = createAccount();
+  try {
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, acct.privateKey);
+  } catch (e) {
+    console.warn("Could not persist test account to localStorage:", e);
+  }
+  activateAccount(acct);
 });
+
+document.getElementById("forgetAcctBtn")?.addEventListener("click", () => {
+  if (!confirm("Generate a brand new test account? You'll lose access to the current one unless you've saved its key elsewhere.")) return;
+  const acct = createAccount();
+  try {
+    localStorage.setItem(ACCOUNT_STORAGE_KEY, acct.privateKey);
+  } catch (e) {
+    console.warn("Could not persist test account to localStorage:", e);
+  }
+  activateAccount(acct);
+});
+
+// On load, restore a previously generated test account (if any) so a page
+// refresh never stops you from reaching funds you already sent it.
+(function restoreAccountFromStorage() {
+  try {
+    const savedKey = localStorage.getItem(ACCOUNT_STORAGE_KEY);
+    if (savedKey) {
+      const acct = createAccount(savedKey);
+      activateAccount(acct);
+    }
+  } catch (e) {
+    console.warn("Could not restore test account from localStorage:", e);
+  }
+})();
 
 document.getElementById("copyAddrBtn").addEventListener("click", async () => {
   if (!account) return;
