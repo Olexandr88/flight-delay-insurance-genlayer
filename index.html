@@ -501,13 +501,10 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
 
 <script type="module">
 import { createClient, createAccount } from "https://esm.sh/genlayer-js@latest?bundle";
+import { studionet } from "https://esm.sh/genlayer-js@latest/chains?bundle";
 
 const CONTRACT = "0xe22165f2439904b2D5A290C109634416b1E090cE";
-const STUDIO_CHAIN = {
-  id: 61999,
-  name: "studionet",
-  rpcUrls: { default: { http: ["https://studio.genlayer.com/api"] } },
-};
+const STUDIO_CHAIN = studionet;
 
 document.getElementById("contractShort").textContent =
   CONTRACT.slice(0, 6) + "…" + CONTRACT.slice(-4);
