@@ -242,6 +242,33 @@ nav.pages a:hover{color:var(--ink);}
 .copy-btn.copied{border-color:var(--stamp-green); color:var(--stamp-green);}
 .account-box .hint{margin-top:8px; font-size:11px;}
 .account-box .hint a{color:var(--stamp-amber); text-decoration:none; border-bottom:1px dotted var(--stamp-amber);}
+.account-box .badge{
+  font-size:10.5px; letter-spacing:0.06em; text-transform:uppercase;
+  padding:3px 9px; border-radius:10px; border:1px solid currentColor; white-space:nowrap;
+}
+.account-box .badge.wallet{color:var(--stamp-green);}
+.account-box .badge.test{color:var(--stamp-amber);}
+.wallet-picker{
+  margin-top:10px; display:none;
+  border:1px dashed var(--rule); border-radius:4px; padding:10px;
+  background:rgba(255,255,255,0.45);
+}
+.wallet-picker .wallet-title{font-size:11px; color:var(--ink-soft); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.06em;}
+.wallet-opt{
+  display:inline-flex; align-items:center; gap:8px; margin:0 8px 8px 0;
+  font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--ink);
+  background:var(--paper); border:1px solid var(--rule); border-radius:3px;
+  padding:7px 12px; cursor:pointer;
+}
+.wallet-opt:hover{border-color:var(--tag-blue); color:var(--tag-blue);}
+.wallet-opt img{border-radius:4px;}
+.wallet-empty{font-size:12px; color:var(--stamp-red);}
+.tx-notice{
+  margin:0 0 16px; padding:10px 14px; border-radius:4px;
+  border:1px solid var(--stamp-amber); color:var(--stamp-amber);
+  background:rgba(168,117,43,0.08);
+  font-family:'IBM Plex Mono', monospace; font-size:12px; line-height:1.5;
+}
 
 .docket h2{
   font-family:'Special Elite', monospace;
@@ -376,18 +403,27 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
       <a href="#/activity" data-page="activity">Activity</a>
     </nav>
 
+    <div id="txNotice" class="tx-notice" style="display:none"></div>
+
     <!-- shared account box, visible on every page -->
     <div class="account-box">
       <div class="row">
-        <span id="noAccountMsg" class="no-account">No test account loaded yet.</span>
+        <button class="btn small primary" id="connectWalletBtn">Connect wallet</button>
+        <button class="btn small" id="genAcctBtn">Use test account</button>
+        <span class="status-line" id="walletStatus"></span>
+      </div>
+      <div class="wallet-picker" id="walletPicker"></div>
+      <div class="row" style="margin-top:12px;">
+        <span id="noAccountMsg" class="no-account">No account connected yet.</span>
         <span id="addrRow" class="row" style="display:none; flex:1;">
+          <span class="badge" id="modeBadge"></span>
           <span class="addr" id="fullAddress"></span>
           <button class="copy-btn" id="copyAddrBtn">Copy address</button>
-          <button class="copy-btn" id="forgetAcctBtn" title="Generate a different test account">New account</button>
+          <button class="copy-btn" id="forgetAcctBtn" title="Generate a different test account">New test account</button>
+          <button class="copy-btn" id="disconnectBtn" title="Forget this wallet on this site">Disconnect</button>
         </span>
-        <button class="btn small" id="genAcctBtn">Generate test account</button>
       </div>
-      <div class="hint">Need test GEN? <a id="faucetLink" href="https://studio.genlayer.com/contracts" target="_blank" rel="noopener">open the Studio faucet →</a>, paste the address above, and request funds.</div>
+      <div class="hint" id="accountHint"></div>
     </div>
 
     <!-- ============ HOME ============ -->
@@ -405,7 +441,7 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
       <div class="panel">
         <h2>How it works</h2>
         <p style="font-size:14px; line-height:1.6; color:var(--ink-soft); margin:0;">
-          1. Generate a test account and fund it via the Studio faucet.<br>
+          1. Connect your browser wallet (MetaMask, Rabby, …) or use a throwaway test account, and fund it via the Studio faucet.<br>
           2. Back the pool, or jump straight to <a href="#/buy">Buy a Policy</a>.<br>
           3. After departure, evaluate the flight — validators read a live status page and agree on a verdict.<br>
           4. Claim your payout (or refund) once the policy is settled.
@@ -481,10 +517,10 @@ footer.foot a{color:var(--tag-blue); text-decoration:none;}
       <section class="docket">
         <h2>Your Activity <small id="activityCount"></small></h2>
         <p style="font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); margin:-6px 0 18px;">
-          Actions you've taken with the test account currently loaded in this browser (stored locally, not on-chain).
+          Actions you've taken with the account currently connected in this browser (stored locally, not on-chain).
         </p>
         <div id="activityList">
-          <div class="empty">No activity yet. Generate an account and buy a policy to get started.</div>
+          <div class="empty">No activity yet. Connect a wallet (or use a test account) and buy a policy to get started.</div>
         </div>
         <div class="btn-row">
           <button class="btn small" id="clearActivityBtn">Clear local activity</button>
@@ -512,7 +548,11 @@ document.getElementById("explorerLink").href =
   "https://explorer-studio.genlayer.com/address/" + CONTRACT;
 
 let readClient;
-let account = null;
+let account = null;          // Account object (test mode) or address string (wallet mode)
+let accountAddress = null;   // plain 0x… address of whoever is signing
+let walletMode = false;
+let walletProvider = null;
+let walletInfo = null;
 let writeClient = null;
 let latestPolicies = []; // cache for explorer/dispute/activity pages
 
@@ -591,7 +631,7 @@ function shorten(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
 
 /* ---------------- local activity log ---------------- */
 function activityKey() {
-  return account ? "fdi_activity_" + account.address.toLowerCase() : null;
+  return accountAddress ? "fdi_activity_" + accountAddress.toLowerCase() : null;
 }
 function logActivity(action, detail) {
   const key = activityKey();
@@ -605,7 +645,7 @@ function renderActivity() {
   const countEl = document.getElementById("activityCount");
   const key = activityKey();
   if (!key) {
-    listEl.innerHTML = '<div class="empty">Generate a test account to see activity for it.</div>';
+    listEl.innerHTML = '<div class="empty">Connect a wallet or use a test account to see activity for it.</div>';
     countEl.textContent = "";
     return;
   }
@@ -725,14 +765,14 @@ function attachHandlers() {
   document.querySelectorAll(".evaluate-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = Number(btn.dataset.id);
-      if (!writeClient) { alert("Generate a test account first."); return; }
+      { const problem = await prepareWrite(); if (problem) { alert(problem); return; } }
       btn.disabled = true;
       btn.textContent = "Evaluating…";
       try {
         const hash = await writeClient.writeContract({
           account, address: CONTRACT, functionName: "evaluate_flight", args: [id], value: 0,
         });
-        await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+        await waitForTx(hash);
         logActivity("Evaluated flight", "Policy #" + id);
         await loadPolicies();
       } catch (e) {
@@ -747,14 +787,14 @@ function attachHandlers() {
   document.querySelectorAll(".claim-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = Number(btn.dataset.id);
-      if (!writeClient) { alert("Generate a test account first."); return; }
+      { const problem = await prepareWrite(); if (problem) { alert(problem); return; } }
       btn.disabled = true;
       btn.textContent = "Claiming…";
       try {
         const hash = await writeClient.writeContract({
           account, address: CONTRACT, functionName: "claim_payout", args: [id], value: 0,
         });
-        await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+        await waitForTx(hash);
         logActivity("Claimed payout", "Policy #" + id);
         await loadPolicies();
         await loadPool();
@@ -768,63 +808,232 @@ function attachHandlers() {
   });
 }
 
-/* ---------------- account (THE FIX) ---------------- */
+/* ---------------- wallet connect + local test account ---------------- */
 const ACCOUNT_STORAGE_KEY = "fdi_test_account_private_key";
+const MODE_STORAGE_KEY = "fdi_account_mode";      // "wallet" | "test"
+const WALLET_RDNS_KEY = "fdi_wallet_rdns";
+const CHAIN_ID_HEX = "0x" + STUDIO_CHAIN.id.toString(16);
+const FAUCET_URL = "https://studio.genlayer.com/contracts";
 
-function activateAccount(acct) {
+function safeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { console.warn("storage:", e); } }
+function safeGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function safeRemove(k) { try { localStorage.removeItem(k); } catch { /* ignore */ } }
+
+let noticeTimer = null;
+function showNotice(msg) {
+  const el = document.getElementById("txNotice");
+  el.textContent = msg;
+  el.style.display = "block";
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => { el.style.display = "none"; }, 20000);
+}
+
+// Waits for a transaction. A timeout is NOT a failure: GenLayer consensus can take
+// longer than the wait window, so we report "still confirming" instead of an error.
+async function waitForTx(hash) {
+  try {
+    await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED", retries: 120, interval: 3000 });
+    return true;
+  } catch (e) {
+    if (/timed out/i.test(e?.message || "")) {
+      showNotice("Transaction " + String(hash).slice(0, 12) + "… was submitted and validators are still confirming it. This can take a minute — press Refresh shortly.");
+      return false;
+    }
+    throw e;
+  }
+}
+
+function renderAccountUI() {
+  const connected = !!accountAddress;
+  document.getElementById("noAccountMsg").style.display = connected ? "none" : "";
+  document.getElementById("addrRow").style.display = connected ? "flex" : "none";
+  const hint = document.getElementById("accountHint");
+  const faucet = `<a href="${FAUCET_URL}" target="_blank" rel="noopener">Studio faucet →</a>`;
+
+  if (!connected) {
+    hint.innerHTML = "Connect a browser wallet to sign with your own address, or use a throwaway test account. Need test GEN? Open the " + faucet;
+    return;
+  }
+  document.getElementById("fullAddress").textContent = accountAddress;
+  const badge = document.getElementById("modeBadge");
+  badge.textContent = walletMode ? "Wallet" : "Test account";
+  badge.className = "badge " + (walletMode ? "wallet" : "test");
+  document.getElementById("forgetAcctBtn").style.display = walletMode ? "none" : "";
+  document.getElementById("disconnectBtn").style.display = walletMode ? "" : "none";
+  hint.innerHTML = walletMode
+    ? "Your wallet signs every transaction — no keys are stored on this site. Need test GEN? Copy your address above and request funds from the " + faucet
+    : "Throwaway key kept in this browser only. Need test GEN? Copy the address above, then use the " + faucet;
+}
+
+/* ---- test account ---- */
+function activateTestAccount(acct) {
+  walletMode = false; walletProvider = null; walletInfo = null;
   account = acct;
+  accountAddress = acct.address;
   writeClient = createClient({ chain: STUDIO_CHAIN, account });
+  safeSet(MODE_STORAGE_KEY, "test");
+  renderAccountUI();
+  renderActivity();
+}
+function restoreTestAccount() {
+  const savedKey = safeGet(ACCOUNT_STORAGE_KEY);
+  if (!savedKey) return false;
+  try { activateTestAccount(createAccount(savedKey)); return true; }
+  catch (e) { console.warn("Could not restore test account:", e); return false; }
+}
+function generateTestAccount() {
+  const acct = createAccount();
+  safeSet(ACCOUNT_STORAGE_KEY, acct.privateKey);
+  activateTestAccount(acct);
+}
 
-  document.getElementById("noAccountMsg").style.display = "none";
-  const addrRow = document.getElementById("addrRow");
-  addrRow.style.display = "flex";
-  document.getElementById("fullAddress").textContent = account.address;
+/* ---- browser wallets (EIP-6963 discovery, so several installed wallets don't fight over window.ethereum) ---- */
+const announcedWallets = new Map();
+window.addEventListener("eip6963:announceProvider", (event) => {
+  const d = event.detail;
+  if (d?.info?.uuid && d.provider) {
+    announcedWallets.set(d.info.uuid, d);
+    renderWalletPicker();
+  }
+});
+window.dispatchEvent(new Event("eip6963:requestProvider"));
 
+function listWallets() {
+  const list = [...announcedWallets.values()];
+  if (!list.length && window.ethereum) {
+    list.push({ info: { uuid: "legacy", name: "Browser wallet", rdns: "legacy.window.ethereum" }, provider: window.ethereum });
+  }
+  return list;
+}
+
+function renderWalletPicker() {
+  const el = document.getElementById("walletPicker");
+  if (el.style.display !== "block") return;
+  const wallets = listWallets();
+  if (!wallets.length) {
+    el.innerHTML = '<div class="wallet-empty">No browser wallet detected. Install MetaMask (or any EVM wallet) and reload this page — or use a test account instead.</div>';
+    return;
+  }
+  el.innerHTML = '<div class="wallet-title">Choose a wallet</div>' + wallets.map((w) =>
+    `<button class="wallet-opt" data-uuid="${escapeAttr(w.info.uuid)}">` +
+    (w.info.icon && String(w.info.icon).startsWith("data:image/") ? `<img src="${escapeAttr(w.info.icon)}" alt="" width="18" height="18">` : "") +
+    `<span>${escapeHtml(w.info.name || "Wallet")}</span></button>`
+  ).join("");
+  el.querySelectorAll(".wallet-opt").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const w = listWallets().find((x) => x.info.uuid === btn.dataset.uuid);
+      if (w) connectWallet(w);
+    });
+  });
+}
+
+// Make sure the wallet is on the GenLayer Studio network (add it if the wallet doesn't know it yet).
+async function ensureStudioChain(provider) {
+  const current = await provider.request({ method: "eth_chainId" });
+  if (String(current).toLowerCase() === CHAIN_ID_HEX.toLowerCase()) return;
+  try {
+    await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CHAIN_ID_HEX }] });
+  } catch (err) {
+    const code = err?.code ?? err?.data?.originalError?.code;
+    if (code !== 4902) throw err;
+    await provider.request({
+      method: "wallet_addEthereumChain",
+      params: [{
+        chainId: CHAIN_ID_HEX,
+        chainName: STUDIO_CHAIN.name || "GenLayer Studio",
+        nativeCurrency: STUDIO_CHAIN.nativeCurrency || { name: "GEN", symbol: "GEN", decimals: 18 },
+        rpcUrls: STUDIO_CHAIN.rpcUrls?.default?.http || ["https://studio.genlayer.com/api"],
+      }],
+    });
+  }
+}
+
+let boundProvider = null;
+function bindWalletEvents(provider) {
+  if (boundProvider === provider || typeof provider.on !== "function") return;
+  boundProvider = provider;
+  provider.on("accountsChanged", (accs) => {
+    if (!walletMode || walletProvider !== provider) return;
+    if (!accs || !accs.length) { disconnectWallet(); return; }
+    useWallet({ info: walletInfo, provider }, accs[0]);
+  });
+}
+
+function useWallet(w, address) {
+  walletMode = true;
+  walletProvider = w.provider;
+  walletInfo = w.info;
+  account = address;            // plain address: genlayer-js signs through `provider`
+  accountAddress = address;
+  writeClient = createClient({ chain: STUDIO_CHAIN, account: address, provider: w.provider });
+  safeSet(MODE_STORAGE_KEY, "wallet");
+  safeSet(WALLET_RDNS_KEY, w.info?.rdns || "");
+  bindWalletEvents(w.provider);
+  renderAccountUI();
   renderActivity();
 }
 
+async function connectWallet(w) {
+  const statusEl = document.getElementById("walletStatus");
+  setStatus(statusEl, "Waiting for " + (w.info?.name || "wallet") + "…", "");
+  try {
+    const accounts = await w.provider.request({ method: "eth_requestAccounts" });
+    if (!accounts || !accounts.length) throw new Error("The wallet returned no accounts.");
+    await ensureStudioChain(w.provider);
+    useWallet(w, accounts[0]);
+    document.getElementById("walletPicker").style.display = "none";
+    setStatus(statusEl, "", "");
+  } catch (e) {
+    console.error(e);
+    const rejected = e?.code === 4001;
+    setStatus(statusEl, rejected ? "Request rejected in the wallet." : "Wallet connection failed: " + (e?.message || e), "err");
+  }
+}
+
+function disconnectWallet() {
+  walletMode = false; walletProvider = null; walletInfo = null;
+  account = null; accountAddress = null; writeClient = null;
+  safeRemove(WALLET_RDNS_KEY);
+  safeSet(MODE_STORAGE_KEY, "");
+  renderAccountUI();
+  renderActivity();
+}
+
+// Called before every write. Returns an error message, or null if we're good to send.
+async function prepareWrite() {
+  if (!writeClient || !accountAddress) return "Connect a wallet or use a test account first.";
+  if (walletMode) {
+    try { await ensureStudioChain(walletProvider); }
+    catch (e) { return "Please switch your wallet to the GenLayer Studio network (chain " + STUDIO_CHAIN.id + "): " + (e?.message || e); }
+  }
+  return null;
+}
+
+document.getElementById("connectWalletBtn").addEventListener("click", async () => {
+  window.dispatchEvent(new Event("eip6963:requestProvider"));
+  await new Promise((r) => setTimeout(r, 150));
+  const wallets = listWallets();
+  const picker = document.getElementById("walletPicker");
+  if (wallets.length === 1) { picker.style.display = "none"; connectWallet(wallets[0]); return; }
+  picker.style.display = picker.style.display === "block" ? "none" : "block";
+  renderWalletPicker();
+});
+
 document.getElementById("genAcctBtn").addEventListener("click", () => {
-  const acct = createAccount();
-  try {
-    localStorage.setItem(ACCOUNT_STORAGE_KEY, acct.privateKey);
-  } catch (e) {
-    console.warn("Could not persist test account to localStorage:", e);
-  }
-  activateAccount(acct);
+  if (!restoreTestAccount()) generateTestAccount();   // reuse the saved key so funded accounts are never stranded
 });
-
-document.getElementById("forgetAcctBtn")?.addEventListener("click", () => {
+document.getElementById("forgetAcctBtn").addEventListener("click", () => {
   if (!confirm("Generate a brand new test account? You'll lose access to the current one unless you've saved its key elsewhere.")) return;
-  const acct = createAccount();
-  try {
-    localStorage.setItem(ACCOUNT_STORAGE_KEY, acct.privateKey);
-  } catch (e) {
-    console.warn("Could not persist test account to localStorage:", e);
-  }
-  activateAccount(acct);
+  generateTestAccount();
 });
-
-// On load, restore a previously generated test account (if any) so a page
-// refresh never stops you from reaching funds you already sent it.
-(function restoreAccountFromStorage() {
-  try {
-    const savedKey = localStorage.getItem(ACCOUNT_STORAGE_KEY);
-    if (savedKey) {
-      const acct = createAccount(savedKey);
-      activateAccount(acct);
-    }
-  } catch (e) {
-    console.warn("Could not restore test account from localStorage:", e);
-  }
-})();
+document.getElementById("disconnectBtn").addEventListener("click", disconnectWallet);
 
 document.getElementById("copyAddrBtn").addEventListener("click", async () => {
-  if (!account) return;
+  if (!accountAddress) return;
   const btn = document.getElementById("copyAddrBtn");
   try {
-    await navigator.clipboard.writeText(account.address);
+    await navigator.clipboard.writeText(accountAddress);
   } catch {
-    // fallback for browsers without async clipboard permission
     const el = document.getElementById("fullAddress");
     const range = document.createRange();
     range.selectNodeContents(el);
@@ -836,21 +1045,33 @@ document.getElementById("copyAddrBtn").addEventListener("click", async () => {
   }
   btn.textContent = "Copied!";
   btn.classList.add("copied");
-  setTimeout(() => {
-    btn.textContent = "Copy address";
-    btn.classList.remove("copied");
-  }, 1800);
+  setTimeout(() => { btn.textContent = "Copy address"; btn.classList.remove("copied"); }, 1800);
 });
+
+async function restoreSession() {
+  if (safeGet(MODE_STORAGE_KEY) === "wallet") {
+    const rdns = safeGet(WALLET_RDNS_KEY);
+    await new Promise((r) => setTimeout(r, 400));          // let wallets announce themselves
+    const w = listWallets().find((x) => (x.info?.rdns || "") === rdns);
+    if (w) {
+      try {
+        const accs = await w.provider.request({ method: "eth_accounts" });   // silent: no popup
+        if (accs && accs.length) { useWallet(w, accs[0]); return; }
+      } catch (e) { console.warn("Silent wallet restore failed:", e); }
+    }
+  }
+  if (!restoreTestAccount()) renderAccountUI();
+}
 
 document.getElementById("fundBtn").addEventListener("click", async () => {
   const amountGen = parseFloat(document.getElementById("fundAmount").value || "0");
-  if (!writeClient) { alert("Generate a test account first."); return; }
+  { const problem = await prepareWrite(); if (problem) { alert(problem); return; } }
   if (!amountGen || amountGen <= 0) { alert("Enter a GEN amount."); return; }
   try {
     const hash = await writeClient.writeContract({
       account, address: CONTRACT, functionName: "fund_pool", args: [], value: genToWei(amountGen),
     });
-    await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
+    await waitForTx(hash);
     logActivity("Backed the pool", amountGen + " GEN");
     document.getElementById("fundAmount").value = "";
     await loadPool();
@@ -875,9 +1096,9 @@ document.getElementById("buyBtn").addEventListener("click", async () => {
     setStatus(statusEl, "Enter a payout amount and a premium, both greater than zero.", "err");
     return;
   }
-  if (!writeClient) {
-    setStatus(statusEl, "Generate a test account first.", "err");
-    return;
+  {
+    const problem = await prepareWrite();
+    if (problem) { setStatus(statusEl, problem, "err"); return; }
   }
   const btn = document.getElementById("buyBtn");
   btn.disabled = true;
@@ -890,8 +1111,8 @@ document.getElementById("buyBtn").addEventListener("click", async () => {
       args: [flight_number, flight_date, genToWei(payoutGen)],
       value: genToWei(premiumGen),
     });
-    await writeClient.waitForTransactionReceipt({ hash, status: "FINALIZED" });
-    setStatus(statusEl, "Policy purchased.", "ok");
+    const done = await waitForTx(hash);
+    setStatus(statusEl, done ? "Policy purchased." : "Policy submitted — validators are still confirming it.", "ok");
     logActivity("Bought policy", flight_number + " on " + flight_date);
     document.getElementById("flightNumber").value = "";
     document.getElementById("flightDate").value = "";
@@ -911,6 +1132,7 @@ document.getElementById("refreshDisputeBtn")?.addEventListener("click", loadPoli
 
 initReadClient().then(() => {
   renderRoute();
+  restoreSession();
 });
 </script>
 </body>
