@@ -963,7 +963,7 @@ function useWallet(w, address) {
   walletMode = true;
   walletProvider = w.provider;
   walletInfo = w.info;
-  account = address;            // plain address: genlayer-js signs through `provider`
+  account = undefined;          // use the wallet account configured on the client
   accountAddress = address;
   writeClient = createClient({ chain: STUDIO_CHAIN, account: address, provider: w.provider });
   safeSet(MODE_STORAGE_KEY, "wallet");
